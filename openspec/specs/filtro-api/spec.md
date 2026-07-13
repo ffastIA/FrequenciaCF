@@ -3,9 +3,7 @@
 ## Purpose
 
 Serviço e endpoints REST de filtros em cascata (Projeto → Aditivo → Meta → Turma → Instrutor) do backend FrequenciaCF, incluindo filtro por situação (status) da turma.
-
 ## Requirements
-
 ### Requirement: FiltroService com cascata de filtros
 O sistema SHALL prover `backend/services/FiltroService.js`, orquestrando os models de `Projeto`, `ProjetoAditivo`, `MetaTurma`, `Turma` e `Instrutor` para implementar a cascata: Projeto → Aditivo → Meta → Turmas (com filtro de situação) → Instrutores.
 
@@ -39,7 +37,7 @@ O sistema SHALL expor `GET /api/filtros/metas?idProjetoAditivo=X`, exigindo `idP
 - **THEN** a resposta tem status 200 com as metas daquele aditivo
 
 ### Requirement: Endpoint de turmas com filtro de situação
-O sistema SHALL expor `GET /api/filtros/turmas?idProjeto=X&idProjetoAditivo=Y&idMeta=Z&idInstrutor=W&status=S`, exigindo `idProjeto` e `idProjetoAditivo` (number, obrigatórios), com `idMeta`, `idInstrutor` e `status` (number, 0 a 4) opcionais via validação Joi. Cada turma retornada SHALL incluir, além dos campos de `turma.*`, os campos `cursoDescricao` (via JOIN com `curso`) e `instrutorNome` (via JOIN com `instrutor`), para que consumidores não precisem resolver esses nomes separadamente.
+O sistema SHALL expor `GET /api/filtros/turmas?idProjeto=X&idProjetoAditivo=Y&idMeta=Z&idInstrutor=W&status=S`, exigindo `idProjeto` e `idProjetoAditivo` (number, obrigatórios), com `idMeta`, `idInstrutor` e `status` (number, 0 a 4) opcionais via validação Joi. Cada turma retornada SHALL incluir, além dos campos de `turma.*`, os campos `cursoDescricao` (via JOIN com `curso`), `instrutorNome` (via JOIN com `instrutor`) e `totalAlunosAtivos`: a quantidade de alunos matriculados naquela turma com `matricula.situacao = 7` ("ativo"), calculada por subquery (sem duplicar linhas de turma), para que consumidores não precisem resolver esses dados separadamente.
 
 #### Scenario: Turmas sem filtro de status
 - **WHEN** um cliente faz `GET /api/filtros/turmas?idProjeto=1&idProjetoAditivo=1`
@@ -56,6 +54,18 @@ O sistema SHALL expor `GET /api/filtros/turmas?idProjeto=X&idProjetoAditivo=Y&id
 #### Scenario: Resposta inclui nomes de curso e instrutor
 - **WHEN** um cliente faz `GET /api/filtros/turmas?idProjeto=1&idProjetoAditivo=1`
 - **THEN** cada turma na resposta inclui `cursoDescricao` e `instrutorNome` preenchidos (não apenas `id_curso`/`id_instrutor`)
+
+#### Scenario: Resposta inclui total de alunos ativos
+- **WHEN** um cliente faz `GET /api/filtros/turmas?idProjeto=1&idProjetoAditivo=1`
+- **THEN** cada turma na resposta inclui `totalAlunosAtivos`, a contagem de alunos com `matricula.situacao = 7` naquela turma
+
+#### Scenario: Turma sem nenhum aluno ativo
+- **WHEN** uma turma do resultado não possui nenhuma matrícula com `situacao = 7`
+- **THEN** `totalAlunosAtivos` é `0` para aquela turma, não `null` nem ausente
+
+#### Scenario: Turma com múltiplas matrículas do mesmo aluno não gera linhas duplicadas
+- **WHEN** a contagem de alunos ativos é calculada para uma turma
+- **THEN** a resposta continua com uma única linha por turma (o subquery não multiplica as linhas de `turma` como um `JOIN` direto com `matricula` faria)
 
 ### Requirement: Endpoint de alunos por turma
 O sistema SHALL expor `GET /api/filtros/alunos?idTurma=X&situacao=S`, exigindo `idTurma` (number, obrigatório) e aceitando `situacao` (number, 0 a 8, opcional) via validação Joi. Sem `situacao`, retorna todos os alunos matriculados na turma (comportamento atual, retrocompatível); com `situacao`, retorna somente os alunos cuja `matricula.situacao` na turma seja igual ao valor informado, com o filtro aplicado na query SQL (não em memória).
@@ -89,3 +99,4 @@ Como o Express 5 expõe `req.query` como getter sem setter, o sistema SHALL arma
 #### Scenario: Reatribuição de req.query não é usada
 - **WHEN** uma rota valida `req.query` com Joi
 - **THEN** o middleware de validação grava o resultado em `req.validatedQuery`, e o handler correspondente lê os parâmetros de `req.validatedQuery`
+

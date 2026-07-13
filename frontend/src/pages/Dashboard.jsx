@@ -185,6 +185,13 @@ export default function Dashboard() {
     { chave: 'instrutor', rotulo: 'Instrutor', tipo: 'texto', classe: '', valor: (t) => t.instrutorNome },
     { chave: 'situacao', rotulo: 'Situação', tipo: 'numero', classe: '', valor: (t) => t.status },
     {
+      chave: 'alunosAtivos',
+      rotulo: 'Alunos ativos',
+      tipo: 'numero',
+      classe: 'col-num',
+      valor: (t) => t.totalAlunosAtivos,
+    },
+    {
       chave: 'inicio',
       rotulo: 'Início',
       tipo: 'numero',
@@ -375,6 +382,7 @@ export default function Dashboard() {
                           {STATUS_TURMA[turma.status]}
                         </span>
                       </td>
+                      <td className="col-num">{turma.totalAlunosAtivos}</td>
                       <td className="col-date">{formatDateBR(turma.data_inicio)}</td>
                       <td className="col-date">{formatDateBR(turma.data_fim)}</td>
                       <td className="col-date">

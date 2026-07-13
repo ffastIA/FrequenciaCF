@@ -60,7 +60,7 @@ curl "http://localhost:3000/api/filtros/metas?idProjetoAditivo=2"
 
 ## `GET /turmas`
 
-Turmas de um projeto/aditivo, com filtros opcionais de meta, instrutor e **situação (status) da turma**. Cada turma inclui `cursoDescricao` e `instrutorNome` (via JOIN), além dos campos de `turma.*`.
+Turmas de um projeto/aditivo, com filtros opcionais de meta, instrutor e **situação (status) da turma**. Cada turma inclui `cursoDescricao` e `instrutorNome` (via JOIN) e `totalAlunosAtivos` (contagem de `matricula.situacao = 7` daquela turma, via subquery), além dos campos de `turma.*`.
 
 | Parâmetro | Tipo | Obrigatório | Observação |
 |---|---|---|---|

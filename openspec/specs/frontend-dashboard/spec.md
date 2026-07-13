@@ -27,7 +27,7 @@ Assim que Projeto e Aditivo estiverem selecionados (Meta é opcional), o sistema
 - **THEN** a tabela de turmas é buscada e exibida automaticamente, sem clique adicional
 
 ### Requirement: Colunas da tabela de turmas
-A tabela de turmas SHALL exibir, para cada turma: código, curso (`cursoDescricao`), instrutor (`instrutorNome`), situação (`status` traduzido para texto legível), data de início (`data_inicio`), data de término (`data_fim`), data do último lançamento de frequência (`dataUltimoLancamento`, obtida na mesma chamada de atraso já feita por turma) e dias de atraso no lançamento (`diasAtraso`). Todas as datas SHALL ser exibidas no formato `dd/mm/aaaa`; valores nulos SHALL ser exibidos como "—".
+A tabela de turmas SHALL exibir, para cada turma: código, curso (`cursoDescricao`), instrutor (`instrutorNome`), situação (`status` traduzido para texto legível), total de alunos ativos (`totalAlunosAtivos`, alunos com `matricula.situacao = 7` naquela turma), data de início (`data_inicio`), data de término (`data_fim`), data do último lançamento de frequência (`dataUltimoLancamento`, obtida na mesma chamada de atraso já feita por turma) e dias de atraso no lançamento (`diasAtraso`). Todas as datas SHALL ser exibidas no formato `dd/mm/aaaa`; valores nulos SHALL ser exibidos como "—". A coluna de alunos ativos SHALL exibir o número diretamente a partir da resposta de `GET /api/filtros/turmas`, sem chamada de rede adicional nem estado de carregamento próprio.
 
 #### Scenario: Situação exibida como texto
 - **WHEN** uma turma tem `status = 3`
@@ -41,6 +41,14 @@ A tabela de turmas SHALL exibir, para cada turma: código, curso (`cursoDescrica
 - **WHEN** a chamada de atraso de uma turma retorna `dataUltimoLancamento`
 - **THEN** a linha correspondente exibe essa data formatada; se `null` (turma nunca lançou), exibe "—"
 
+#### Scenario: Total de alunos ativos visível na tabela
+- **WHEN** a tabela de turmas é exibida
+- **THEN** cada linha mostra o número de alunos ativos daquela turma (`totalAlunosAtivos`), aparecendo junto com as demais colunas da linha, sem atraso de carregamento
+
+#### Scenario: Turma sem nenhum aluno ativo
+- **WHEN** uma turma da tabela não tem nenhum aluno com `matricula.situacao = 7`
+- **THEN** a coluna de alunos ativos exibe `0`, não "—" nem célula vazia (o dado sempre está disponível, diferente das colunas que dependem de carregamento assíncrono)
+
 ### Requirement: Busca de atraso por turma
 Para cada turma exibida na tabela, o sistema SHALL buscar `diasAtraso` via `GET /api/metricas/atraso-lancamento/turma?idTurma=X`, uma chamada por turma, disparadas em paralelo após a tabela base carregar.
 
@@ -53,7 +61,7 @@ Para cada turma exibida na tabela, o sistema SHALL buscar `diasAtraso` via `GET 
 - **THEN** a célula exibe "—", nunca "null" ou uma célula quebrada
 
 ### Requirement: Filtros adicionais de Instrutor e Situação
-Na mesma tela onde a tabela é exibida, o sistema SHALL disponibilizar um filtro de Instrutor (select populado via `GET /api/filtros/instrutores?idTurmas=<ids das turmas do escopo Projeto/Aditivo/Meta, sem os filtros adicionais>`) e um filtro de Situação (select fixo com as 5 opções de `status`). O filtro de Situação SHALL ter "Iniciada" (`status = 2`) como valor padrão, aplicado no primeiro carregamento (quando a URL não especifica Situação) e ao resetar por troca de Projeto/Aditivo; "Todas" e as demais situações continuam selecionáveis, e a escolha de "Todas" SHALL ser representável e preservável na URL de forma distinta do padrão (para que voltar/refresh não reintroduza "Iniciada" quando o usuário escolheu "Todas"). Ao alterar qualquer um desses filtros, o sistema SHALL reconsultar `GET /api/filtros/turmas` incluindo o parâmetro correspondente (`idInstrutor` e/ou `status`), mantendo `idProjeto`/`idProjetoAditivo`/`idMeta` já selecionados. Os controles de Instrutor e Situação SHALL permanecer visíveis sempre que Projeto e Aditivo estiverem selecionados, independentemente de a combinação de filtros atual retornar zero turmas.
+Na mesma tela onde a tabela é exibida, o sistema SHALL disponibilizar um filtro de Instrutor (select populado via `GET /api/filtros/instrutores?idTurmas=<ids das turmas do escopo Projeto/Aditivo/Meta, sem os filtros adicionais>`), um filtro de Situação (select fixo com as 5 opções de `status`) e um filtro de texto opcional por Código da turma, os três na mesma barra de filtros adicionais, abaixo da linha de Projeto/Aditivo/Meta. O filtro de Situação SHALL ter "Iniciada" (`status = 2`) como valor padrão, aplicado no primeiro carregamento (quando a URL não especifica Situação) e ao resetar por troca de Projeto/Aditivo; "Todas" e as demais situações continuam selecionáveis, e a escolha de "Todas" SHALL ser representável e preservável na URL de forma distinta do padrão (para que voltar/refresh não reintroduza "Iniciada" quando o usuário escolheu "Todas"). Ao alterar Instrutor ou Situação, o sistema SHALL reconsultar `GET /api/filtros/turmas` incluindo o parâmetro correspondente (`idInstrutor` e/ou `status`), mantendo `idProjeto`/`idProjetoAditivo`/`idMeta` já selecionados; o filtro de Código da turma, por ser aplicado no cliente, SHALL NOT disparar nova requisição. Os três controles SHALL permanecer visíveis sempre que Projeto e Aditivo estiverem selecionados, independentemente de a combinação de filtros atual retornar zero turmas.
 
 #### Scenario: Situação inicia em "Iniciada"
 - **WHEN** o usuário seleciona um Projeto e um Aditivo, sem tocar no filtro de Situação
@@ -76,8 +84,8 @@ Na mesma tela onde a tabela é exibida, o sistema SHALL disponibilizar um filtro
 - **THEN** a tabela é recarregada mostrando somente turmas com `status = 3`
 
 #### Scenario: Combinação de filtros sem resultados
-- **WHEN** a combinação de Instrutor + Situação selecionada não corresponde a nenhuma turma
-- **THEN** a tela exibe uma mensagem de "nenhuma turma encontrada", mantendo os selects de Instrutor e Situação visíveis e utilizáveis (não somem da tela)
+- **WHEN** a combinação de Instrutor + Situação + Código da turma selecionada não corresponde a nenhuma turma
+- **THEN** a tela exibe uma mensagem de "nenhuma turma encontrada", mantendo os três controles visíveis e utilizáveis (não somem da tela)
 
 ### Requirement: Drill-down para detalhe da turma
 Cada linha da tabela de turmas SHALL ser clicável, navegando para a rota `/turmas/:idTurma` daquela turma específica (não um filtro que estreita a tabela atual). A navegação SHALL carregar a URL de origem do Dashboard (com os filtros atuais) para que o retorno ao Dashboard restaure os filtros que estavam selecionados antes do drill-down.
@@ -221,4 +229,62 @@ A ordenação SHALL comparar o valor subjacente de cada coluna (número para col
 #### Scenario: Ordenação se ajusta conforme os dados assíncronos chegam
 - **WHEN** a tabela está ordenada por uma coluna cujos valores ainda estão sendo carregados por aluno
 - **THEN** conforme cada valor chega, a linha correspondente é reposicionada de acordo com a ordenação ativa, sem exigir uma nova interação do usuário
+
+### Requirement: Ordenação por coluna na tabela de turmas do Dashboard
+Na tela do Dashboard, cada cabeçalho da tabela de turmas (Código, Curso, Instrutor, Situação, Alunos ativos, Início, Término, Último lançamento, Dias de atraso) SHALL ser clicável. O primeiro clique num cabeçalho SHALL ordenar a tabela por aquela coluna em ordem crescente; um novo clique no mesmo cabeçalho SHALL inverter para ordem decrescente; um novo clique SHALL voltar a crescente, alternando indefinidamente entre as duas direções. Clicar num cabeçalho diferente do que estava ativo SHALL trocar a ordenação para a nova coluna em ordem crescente, mantendo sempre uma única coluna ordenada por vez. O cabeçalho da coluna ativa SHALL exibir um indicador visual da direção atual (crescente ou decrescente). Este comportamento SHALL seguir os mesmos critérios de comparação já estabelecidos para a tabela de alunos da tela de detalhe da turma (comparação por valor bruto, texto com acentuação, valores ausentes por último).
+
+#### Scenario: Primeiro clique ordena crescente
+- **WHEN** o usuário clica pela primeira vez no cabeçalho de uma coluna da tabela de turmas
+- **THEN** a tabela é reordenada por aquela coluna em ordem crescente, com o indicador visual de "crescente" no cabeçalho
+
+#### Scenario: Clique subsequente alterna a direção
+- **WHEN** o usuário clica novamente no cabeçalho da coluna que já está ordenando a tabela
+- **THEN** a tabela é reordenada na direção oposta, e o indicador do cabeçalho reflete a nova direção
+
+#### Scenario: Clicar em outra coluna substitui a ordenação ativa
+- **WHEN** a tabela está ordenada por uma coluna e o usuário clica no cabeçalho de outra coluna
+- **THEN** a tabela passa a ser ordenada pela nova coluna em ordem crescente, e o indicador da coluna anterior desaparece
+
+#### Scenario: Coluna "Situação" ordena pela progressão da situação, não pelo texto traduzido
+- **WHEN** o usuário ordena a coluna "Situação"
+- **THEN** as turmas são ordenadas pela progressão `status` (0 não especificado, 1 não iniciada, 2 iniciada, 3 concluída, 4 cancelada), não pela ordem alfabética do texto exibido no badge
+
+#### Scenario: Colunas de data ordenam cronologicamente
+- **WHEN** o usuário ordena a coluna "Início", "Término" ou "Último lançamento"
+- **THEN** as turmas são ordenadas pela data real (cronológica), não pela string formatada `dd/mm/aaaa`
+
+#### Scenario: Coluna "Alunos ativos" ordena numericamente
+- **WHEN** o usuário ordena a coluna "Alunos ativos"
+- **THEN** as turmas são ordenadas pelo valor numérico de `totalAlunosAtivos`, incluindo corretamente as turmas com `0` (não tratadas como ausentes/últimas, já que `0` é um valor real, não um dado faltante)
+
+#### Scenario: Valores ainda carregando ou ausentes ficam por último
+- **WHEN** a tabela é ordenada pela coluna "Último lançamento" ou "Dias de atraso" enquanto os dados de atraso de algumas turmas ainda estão carregando (ou a turma não tem valor, ex.: sem nenhuma aula)
+- **THEN** essas linhas aparecem sempre no final da tabela, em ambas as direções, e se reposicionam automaticamente assim que o dado chega, sem exigir nova interação
+
+### Requirement: Filtro adicional por código de turma
+Na mesma barra dos filtros adicionais (Instrutor, Situação), o sistema SHALL disponibilizar um campo de texto opcional "Código da turma" onde o usuário pode digitar o código de uma ou mais turmas, separados por ponto e vírgula (`;`). Quando preenchido, a tabela SHALL exibir somente as turmas cujo `codigo` corresponda, de forma exata (ignorando maiúsculas/minúsculas e espaços ao redor de cada item), a algum dos códigos informados. O filtro SHALL ser aplicado sobre os dados de turmas já carregados no cliente (sem nova requisição à API) e SHALL ser combinado com os demais filtros já aplicados (Projeto/Aditivo/Meta/Instrutor/Situação). O filtro SHALL ser preservado na URL, seguindo o mesmo padrão dos demais filtros do Dashboard, e SHALL ser resetado ao trocar Projeto, Aditivo ou Meta, junto com Instrutor e Situação.
+
+#### Scenario: Filtrar por um único código
+- **WHEN** o usuário digita `IR2-2602` no campo "Código da turma"
+- **THEN** a tabela mostra somente a turma com esse código, dentro do escopo já filtrado por Projeto/Aditivo/Meta/Instrutor/Situação
+
+#### Scenario: Filtrar por múltiplos códigos separados por ponto e vírgula
+- **WHEN** o usuário digita `IR2-2602;OBR2-2602`
+- **THEN** a tabela mostra as turmas cujos códigos sejam `IR2-2602` ou `OBR2-2602`
+
+#### Scenario: Espaços e caixa são ignorados na comparação
+- **WHEN** o usuário digita `ir2-2602; OBR2-2602 ` (com espaços e minúsculas)
+- **THEN** o filtro casa normalmente com os códigos `IR2-2602` e `OBR2-2602`, sem exigir digitação exata
+
+#### Scenario: Nenhuma turma corresponde aos códigos informados
+- **WHEN** os códigos digitados não correspondem a nenhuma turma do escopo atual
+- **THEN** a tabela exibe a mensagem de "nenhuma turma encontrada", mantendo o campo de código visível e preenchido
+
+#### Scenario: Campo vazio não filtra nada
+- **WHEN** o campo "Código da turma" está vazio
+- **THEN** a tabela mostra todas as turmas do escopo, sem restrição adicional por código
+
+#### Scenario: Trocar de Projeto/Aditivo/Meta reseta o filtro de código
+- **WHEN** o usuário tem códigos digitados no filtro e troca o Projeto, o Aditivo ou a Meta
+- **THEN** o campo "Código da turma" é limpo, junto com Instrutor e Situação
 

@@ -56,7 +56,7 @@ Na mesma barra dos filtros adicionais (Instrutor, Situação), o sistema SHALL d
 
 ## MODIFIED Requirements
 
-### Requirement: Filtros adicionais de Instrutor, Situação e Código da turma
+### Requirement: Filtros adicionais de Instrutor e Situação
 Na mesma tela onde a tabela é exibida, o sistema SHALL disponibilizar um filtro de Instrutor (select populado via `GET /api/filtros/instrutores?idTurmas=<ids das turmas do escopo Projeto/Aditivo/Meta, sem os filtros adicionais>`), um filtro de Situação (select fixo com as 5 opções de `status`) e um filtro de texto opcional por Código da turma, os três na mesma barra de filtros adicionais, abaixo da linha de Projeto/Aditivo/Meta. O filtro de Situação SHALL ter "Iniciada" (`status = 2`) como valor padrão, aplicado no primeiro carregamento (quando a URL não especifica Situação) e ao resetar por troca de Projeto/Aditivo; "Todas" e as demais situações continuam selecionáveis, e a escolha de "Todas" SHALL ser representável e preservável na URL de forma distinta do padrão (para que voltar/refresh não reintroduza "Iniciada" quando o usuário escolheu "Todas"). Ao alterar Instrutor ou Situação, o sistema SHALL reconsultar `GET /api/filtros/turmas` incluindo o parâmetro correspondente (`idInstrutor` e/ou `status`), mantendo `idProjeto`/`idProjetoAditivo`/`idMeta` já selecionados; o filtro de Código da turma, por ser aplicado no cliente, SHALL NOT disparar nova requisição. Os três controles SHALL permanecer visíveis sempre que Projeto e Aditivo estiverem selecionados, independentemente de a combinação de filtros atual retornar zero turmas.
 
 #### Scenario: Situação inicia em "Iniciada"
