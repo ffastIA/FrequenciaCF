@@ -1,0 +1,73 @@
+@baseUrl = http://localhost:3000
+
+### Listar projetos
+GET {{baseUrl}}/api/filtros/projetos
+
+### Aditivos de um projeto (ajuste idProjeto conforme os dados retornados acima)
+GET {{baseUrl}}/api/filtros/aditivos?idProjeto=16
+
+### Erro esperado: idProjeto ausente -> 400
+GET {{baseUrl}}/api/filtros/aditivos
+
+### Metas de um aditivo (ajuste idProjetoAditivo)
+GET {{baseUrl}}/api/filtros/metas?idProjetoAditivo=2
+
+### Turmas do projeto/aditivo, sem filtro de status
+GET {{baseUrl}}/api/filtros/turmas?idProjeto=16&idProjetoAditivo=2
+
+### Turmas filtradas por situação (status): 0 não especificado / 1 não iniciada / 2 iniciada / 3 concluída / 4 cancelada
+GET {{baseUrl}}/api/filtros/turmas?idProjeto=16&idProjetoAditivo=2&status=3
+
+### Erro esperado: status fora do intervalo 0-4 -> 400
+GET {{baseUrl}}/api/filtros/turmas?idProjeto=16&idProjetoAditivo=2&status=9
+
+### Instrutores de uma ou mais turmas (ajuste idTurmas)
+GET {{baseUrl}}/api/filtros/instrutores?idTurmas=1597
+
+### Alunos matriculados numa turma (todos)
+GET {{baseUrl}}/api/filtros/alunos?idTurma=1597
+
+### Somente alunos ativos (matricula.situacao = 7)
+GET {{baseUrl}}/api/filtros/alunos?idTurma=4509&situacao=7
+
+### Erro esperado: situacao fora do intervalo 0-8 -> 400
+GET {{baseUrl}}/api/filtros/alunos?idTurma=1597&situacao=9
+
+### Erro esperado: idTurma ausente -> 400
+GET {{baseUrl}}/api/filtros/alunos
+
+### Faltas de um aluno numa turma (default: turma.data_inicio até hoje)
+GET {{baseUrl}}/api/metricas/faltas?idTurma=1597&idAluno=10147
+
+### Faltas com filtro de datas explícito
+GET {{baseUrl}}/api/metricas/faltas?idTurma=1597&idAluno=10147&dataInicio=2000-01-01&dataFim=2030-12-31
+
+### dataFim futura -> deve ser limitada a hoje, sem erro
+GET {{baseUrl}}/api/metricas/faltas?idTurma=1597&idAluno=10147&dataFim=2099-01-01
+
+### Turma com aulas sem frequência lançada (aulasSemFrequenciaLancada > 0, sem gerar falta)
+GET {{baseUrl}}/api/metricas/faltas?idTurma=5720&idAluno=28684
+
+### Erro esperado: idAluno ausente -> 400
+GET {{baseUrl}}/api/metricas/faltas?idTurma=1597
+
+### Atraso no lançamento por turma
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=1597
+
+### Atraso no lançamento por turma que nunca lançou nada (fallback: primeira aula)
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=94
+
+### Atraso no lançamento agregado por instrutor
+GET {{baseUrl}}/api/metricas/atraso-lancamento/instrutor?idInstrutor=224
+
+### Faltas recentes por turma (últimas 4 aulas realizadas)
+GET {{baseUrl}}/api/metricas/faltas-recentes?idTurma=5986
+
+### Faltas recentes: turma com menos de 4 aulas realizadas (aulasConsideradas < 4)
+GET {{baseUrl}}/api/metricas/faltas-recentes?idTurma=4125
+
+### Faltas recentes: turma sem nenhuma aula realizada (aulasConsideradas = 0)
+GET {{baseUrl}}/api/metricas/faltas-recentes?idTurma=5955
+
+### Erro esperado: idTurma ausente -> 400
+GET {{baseUrl}}/api/metricas/faltas-recentes
