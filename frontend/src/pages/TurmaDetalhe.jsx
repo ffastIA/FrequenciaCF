@@ -5,6 +5,7 @@ import { getAtrasoTurma, getFaltasRecentes } from '../api/metricas';
 import { useFaltasPorAlunos } from '../hooks/useFaltasPorAlunos';
 import { STATUS_TURMA } from '../constants';
 import { formatDateBR } from '../utils/formatDate';
+import { compararValores } from '../utils/ordenacao';
 
 // Alunos exibidos no detalhe: somente situação "ativo" (matricula.situacao = 7),
 // decisão explícita do responsável do projeto.
@@ -12,20 +13,6 @@ const SITUACAO_ATIVO = 7;
 
 function formatPercentual(percentual) {
   return percentual === null || percentual === undefined ? '—' : `${percentual}%`;
-}
-
-// Compara dois valores (já extraídos, não a string formatada da célula) respeitando
-// a direção escolhida. null/undefined sempre vão por último, nas duas direções —
-// só a comparação entre valores reais é invertida pela direção.
-function compararValores(a, b, tipo, direcao) {
-  const aNulo = a === null || a === undefined;
-  const bNulo = b === null || b === undefined;
-  if (aNulo && bNulo) return 0;
-  if (aNulo) return 1;
-  if (bNulo) return -1;
-
-  const comparacao = tipo === 'texto' ? a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }) : a - b;
-  return direcao === 'asc' ? comparacao : -comparacao;
 }
 
 export default function TurmaDetalhe() {

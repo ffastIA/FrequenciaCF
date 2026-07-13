@@ -4,12 +4,21 @@ import { getProjetos, getAditivos, getMetas, getTurmas, getInstrutores } from '.
 import { useAtrasoPorTurmas } from '../hooks/useAtrasoPorTurmas';
 import { STATUS_TURMA, STATUS_TURMA_OPTIONS } from '../constants';
 import { formatDateBR } from '../utils/formatDate';
+import { compararValores } from '../utils/ordenacao';
 
 // Situação padrão do dashboard: "Iniciada" (status = 2), refletindo o foco em turmas
 // em andamento. Na URL, ausência de `status` = padrão Iniciada; `status=todas` = Todas
 // (escolha explícita, preservável); qualquer outro valor = aquela situação específica.
 const STATUS_PADRAO = '2';
 const STATUS_TODAS = 'todas';
+
+// Converte uma data (string ISO vinda da API) em timestamp para ordenação
+// cronológica; null quando ausente ou inválida (fica sempre por último).
+function dataParaTimestamp(valor) {
+  if (!valor) return null;
+  const tempo = new Date(valor).getTime();
+  return Number.isNaN(tempo) ? null : tempo;
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -25,6 +34,7 @@ export default function Dashboard() {
   const statusParam = searchParams.get('status');
   // valor do select: '' = Todas; '2' = Iniciada (padrão quando ausente); etc.
   const status = statusParam === null ? STATUS_PADRAO : statusParam === STATUS_TODAS ? '' : statusParam;
+  const codigos = searchParams.get('codigos') || '';
 
   const [projetos, setProjetos] = useState([]);
   const [aditivos, setAditivos] = useState([]);
@@ -34,6 +44,7 @@ export default function Dashboard() {
   const [turmas, setTurmas] = useState([]);
   const [carregandoTurmas, setCarregandoTurmas] = useState(false);
   const [erro, setErro] = useState(null);
+  const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: 'asc' });
 
   const atrasos = useAtrasoPorTurmas(turmas);
 
@@ -110,6 +121,7 @@ export default function Dashboard() {
       p.delete('idMeta');
       p.delete('idInstrutor');
       p.delete('status');
+      p.delete('codigos');
     });
   }
 
@@ -119,6 +131,7 @@ export default function Dashboard() {
       p.delete('idMeta');
       p.delete('idInstrutor');
       p.delete('status');
+      p.delete('codigos');
     });
   }
 
@@ -127,6 +140,7 @@ export default function Dashboard() {
       value ? p.set('idMeta', value) : p.delete('idMeta');
       p.delete('idInstrutor');
       p.delete('status');
+      p.delete('codigos');
     });
   }
 
@@ -142,6 +156,86 @@ export default function Dashboard() {
       p.set('status', value === '' ? STATUS_TODAS : value);
     });
   }
+
+  function handleCodigosChange(value) {
+    updateParams((p) => {
+      value ? p.set('codigos', value) : p.delete('codigos');
+    });
+  }
+
+  // Filtro de código: aplicado no cliente sobre as turmas já carregadas, sem nova
+  // requisição. Comparação exata por código, ignorando maiúsculas/minúsculas e
+  // espaços ao redor de cada item separado por ";".
+  const codigosFiltro = codigos
+    .split(';')
+    .map((c) => c.trim().toUpperCase())
+    .filter(Boolean);
+  const turmasFiltradas =
+    codigosFiltro.length === 0
+      ? turmas
+      : turmas.filter((t) => codigosFiltro.includes((t.codigo || '').toUpperCase()));
+
+  // Colunas da tabela: cada uma expõe um extrator de valor BRUTO (não a string
+  // formatada da célula) para a ordenação comparar corretamente número/data como
+  // número e texto como texto. "Situação" ordena pela progressão do status (0-4),
+  // não pelo texto traduzido. null = "sem dado ainda" (carregando ou inexistente).
+  const colunas = [
+    { chave: 'codigo', rotulo: 'Código', tipo: 'texto', classe: '', valor: (t) => t.codigo },
+    { chave: 'curso', rotulo: 'Curso', tipo: 'texto', classe: '', valor: (t) => t.cursoDescricao },
+    { chave: 'instrutor', rotulo: 'Instrutor', tipo: 'texto', classe: '', valor: (t) => t.instrutorNome },
+    { chave: 'situacao', rotulo: 'Situação', tipo: 'numero', classe: '', valor: (t) => t.status },
+    {
+      chave: 'inicio',
+      rotulo: 'Início',
+      tipo: 'numero',
+      classe: 'col-date',
+      valor: (t) => dataParaTimestamp(t.data_inicio),
+    },
+    {
+      chave: 'termino',
+      rotulo: 'Término',
+      tipo: 'numero',
+      classe: 'col-date',
+      valor: (t) => dataParaTimestamp(t.data_fim),
+    },
+    {
+      chave: 'ultimoLancamento',
+      rotulo: 'Último lançamento',
+      tipo: 'numero',
+      classe: 'col-date',
+      valor: (t) => {
+        const atraso = atrasos[t.id_turma];
+        if (!atraso || atraso.carregando || atraso.erro) return null;
+        return dataParaTimestamp(atraso.dataUltimoLancamento);
+      },
+    },
+    {
+      chave: 'diasAtraso',
+      rotulo: 'Dias de atraso',
+      tipo: 'numero',
+      classe: 'col-num',
+      valor: (t) => {
+        const atraso = atrasos[t.id_turma];
+        if (!atraso || atraso.carregando || atraso.erro) return null;
+        return atraso.diasAtraso ?? null;
+      },
+    },
+  ];
+
+  function handleOrdenar(chave) {
+    setOrdenacao((atual) =>
+      atual.coluna === chave
+        ? { coluna: chave, direcao: atual.direcao === 'asc' ? 'desc' : 'asc' }
+        : { coluna: chave, direcao: 'asc' }
+    );
+  }
+
+  const colunaOrdenada = colunas.find((c) => c.chave === ordenacao.coluna);
+  const turmasOrdenadas = colunaOrdenada
+    ? [...turmasFiltradas].sort((a, b) =>
+        compararValores(colunaOrdenada.valor(a), colunaOrdenada.valor(b), colunaOrdenada.tipo, ordenacao.direcao)
+      )
+    : turmasFiltradas;
 
   return (
     <div>
@@ -221,6 +315,16 @@ export default function Dashboard() {
                 ))}
               </select>
             </label>
+
+            <label className="filter-field">
+              <span>Código da turma (opcional)</span>
+              <input
+                type="text"
+                placeholder="ex.: IR2-2602;OBR2-2602"
+                value={codigos}
+                onChange={(e) => handleCodigosChange(e.target.value)}
+              />
+            </label>
           </div>
         ) : null}
       </section>
@@ -228,25 +332,29 @@ export default function Dashboard() {
       {idProjeto && idProjetoAditivo ? (
         carregandoTurmas ? (
           <p className="state-message">Carregando turmas...</p>
-        ) : turmas.length === 0 ? (
+        ) : turmasOrdenadas.length === 0 ? (
           <p className="state-message">Nenhuma turma encontrada para os filtros selecionados.</p>
         ) : (
           <section className="card table-card">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Código</th>
-                  <th>Curso</th>
-                  <th>Instrutor</th>
-                  <th>Situação</th>
-                  <th className="col-date">Início</th>
-                  <th className="col-date">Término</th>
-                  <th className="col-date">Último lançamento</th>
-                  <th className="col-num">Dias de atraso</th>
+                  {colunas.map((coluna) => (
+                    <th
+                      key={coluna.chave}
+                      className={[coluna.classe, 'sortable'].filter(Boolean).join(' ')}
+                      onClick={() => handleOrdenar(coluna.chave)}
+                    >
+                      {coluna.rotulo}
+                      {ordenacao.coluna === coluna.chave && (
+                        <span className="sort-indicator">{ordenacao.direcao === 'asc' ? ' ▲' : ' ▼'}</span>
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {turmas.map((turma) => {
+                {turmasOrdenadas.map((turma) => {
                   const atraso = atrasos[turma.id_turma];
                   const carregandoAtraso = !atraso || atraso.carregando;
                   return (
