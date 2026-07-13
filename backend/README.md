@@ -13,11 +13,24 @@ npm install
 
 ## Configuração
 
-Copie `.env.example` para `.env` e preencha as credenciais do banco:
+O carregamento de variáveis de ambiente usa [`@dotenvx/dotenvx`](https://dotenvx.com), que criptografa os valores do `.env` (incluindo a senha do MySQL) com um par de chaves pública/privada. O `.env` cifrado pode transitar por qualquer canal sem expor a senha; só a chave privada (`.env.keys`) precisa de um canal seguro.
+
+**Primeira configuração (quem já tem acesso às credenciais):**
 
 ```bash
 cp .env.example .env
+npx dotenvx encrypt   # preencha os valores antes, depois criptografe
 ```
+
+Isso cifra os valores em `.env` e gera `backend/.env.keys` com a chave privada.
+
+**Recebendo um ambiente já configurado (deploy/handoff):**
+
+Você deve receber **dois arquivos por canais separados**:
+- `backend/.env` (cifrado) — pode vir por qualquer meio (e-mail, chat, git).
+- `backend/.env.keys` (chave privada) — SÓ deve vir por um canal seguro (cofre de senhas compartilhado, link de segredo único, verbalmente). **Nunca pelo mesmo canal do `.env`.**
+
+Coloque os dois arquivos em `backend/` e siga para "Rodando localmente" — nenhum passo adicional é necessário.
 
 Variáveis obrigatórias:
 
@@ -31,7 +44,11 @@ Variáveis obrigatórias:
 | `PORT` | Porta do servidor Express (default `3000`) |
 | `NODE_ENV` | `development` para expor detalhes de erro nas respostas |
 
-**Nunca commite o arquivo `.env`** (já está no `.gitignore`).
+**Nunca commite `.env` nem `.env.keys`** (ambos já estão no `.gitignore`).
+
+Se a credencial do MySQL for trocada (rotação), gere um novo par rodando `npx dotenvx encrypt` novamente após atualizar os valores em texto puro, e distribua o novo `.env`/`.env.keys` do mesmo jeito.
+
+Sem `.env.keys` presente (ou com a chave errada), o servidor **falha na inicialização** com uma mensagem indicando quais variáveis não puderam ser decifradas — ele nunca sobe com credenciais inválidas silenciosamente.
 
 ## Rodando localmente
 
