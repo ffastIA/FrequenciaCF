@@ -1,6 +1,6 @@
 # FrequenciaCF
 
-Sistema de acompanhamento de frequência do Centro de Formação, sobre o banco `CentroFormacao` (MySQL, produção).
+Sistema de acompanhamento de frequência do Centro de Formação, sobre o banco `CentroFormacao` (MySQL).
 
 ## Conteúdo do projeto
 
