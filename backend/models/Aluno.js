@@ -12,7 +12,7 @@ class AlunoModel {
   // 3 desistiu / 4 evadido / 5 não aprovado / 6 não iniciou / 7 ativo / 8 transferido
   async getAlunosPorTurma(idTurma, situacao) {
     let sql = `
-      SELECT a.*
+      SELECT a.*, m.situacao
       FROM aluno a
       INNER JOIN matricula m ON m.id_aluno = a.id_aluno
       WHERE m.id_turma = ?

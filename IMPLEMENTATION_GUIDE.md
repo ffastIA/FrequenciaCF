@@ -708,9 +708,157 @@ Essas duas mudanças devem ser feitas **no backend** (nova mini-change ou como p
 
 ## 🚀 PRÓXIMAS FASES DO FRONTEND
 
-- **Frontend Phase 2/3** (a detalhar): refinamentos de UX, endpoint em lote de atraso se a performance real exigir, integração com a Phase 3 do backend (exportação Excel/PDF) na UI.
+- **Frontend Phase 2: Exportação para Excel** — detalhamento completo ao final deste documento, seção "IMPLEMENTATION_GUIDE.md - Frontend Phase 2: Exportação para Excel".
+- **Frontend Phase 3: Painel de Lançamentos Atrasados** — detalhamento completo ao final deste documento, seção "IMPLEMENTATION_GUIDE.md - Frontend Phase 3: Painel de Lançamentos Atrasados".
 
 ---
 
-**Status:** Definições fechadas com o responsável do projeto — aguardando `/opsx:propose` + revisão antes de implementar
-**Última atualização:** 2026-07-12
+**Status:** Implementado (ver `openspec/changes/archive/2026-07-13-frontend-phase1-dashboard/` e `2026-07-13-frontend-phase2-refinements/`)
+**Última atualização:** 2026-07-14
+
+---
+---
+
+# IMPLEMENTATION_GUIDE.md - Frontend Phase 2: Exportação para Excel
+
+## 📋 VISÃO GERAL DA IMPLEMENTAÇÃO
+
+**Change:** `frontend-exportacao-excel`
+**Pré-requisito:** Frontend Phase 1 e Phase 2 (refinamentos) completas — `Dashboard.jsx` e `TurmaDetalhe.jsx` já existem, com suas tabelas de turmas e de alunos ativos.
+**Objetivo:** botão "Exportar para Excel" nas duas telas com tabela (Dashboard e detalhe da turma), gerando um arquivo `.xlsx` real que reflete exatamente a tabela como está na tela no momento do clique — filtros e ordenação já aplicados. Escopo propositalmente simples nesta fase; funcionalidades mais completas (múltiplas planilhas, seleção de colunas) ficam para avaliação futura.
+
+**Correção de rota em relação ao plano original:** a Phase 3 mencionada no plano de Backend Phase 1 ("Endpoints de export Excel (SheetJS)") previa geração no **backend**. Esta fase substitui esse plano: a geração é **100% no cliente**, porque boa parte do que aparece nas tabelas hoje (tradução de situação, formatação de data, filtro de código de turma, ordenação por coluna) só existe no frontend — replicar essa lógica no backend duplicaria regras e criaria risco de o arquivo divergir da tela.
+
+---
+
+## 🎯 DECISÕES FECHADAS
+
+1. **Biblioteca `xlsx` (SheetJS, edição comunitária)** — mesma biblioteca já prevista no plano original, usada em modo client-side (gera o arquivo e aciona o download direto no navegador, sem chamada de rede).
+2. **Conteúdo do arquivo = exatamente o que está na tela**: mesmas linhas (respeitando os filtros já aplicados) e mesma ordem (respeitando a ordenação por coluna ativa) do momento do clique.
+3. **Valores formatados, não brutos**: datas em `dd/mm/aaaa`, situação traduzida para texto, percentual com `%` — o mesmo texto exibido na célula da tabela, não o valor cru da API.
+4. **Célula ainda carregando no momento do clique exporta como "—"**, nunca o indicador visual "..." (que só faz sentido em tela, não num arquivo baixado).
+5. **Botão só aparece quando há dados para exportar** — mesma condição que já controla a exibição da tabela em cada tela.
+6. **Sem endpoint novo no backend, sem mudança de schema.**
+
+---
+
+## 🎯 FASES DE IMPLEMENTAÇÃO
+
+### FASE E2.1: Utilitário Compartilhado
+
+- Instalar `xlsx` como dependência do frontend
+- `frontend/src/utils/exportarExcel.js`: `exportarParaExcel(nomeArquivo, colunas, linhas)`, onde `colunas` é `{ rotulo, valor: (linha) => string }[]` (mesmo formato já usado pelos arrays `colunas` de cada tela) — monta a planilha via `XLSX.utils.json_to_sheet` e aciona o download via `XLSX.writeFile`
+
+### FASE E2.2: Dashboard
+
+- Extratores de valor **formatado** por coluna para exportação (reaproveitando `formatDateBR`, `STATUS_TURMA` e o tratamento de "—" já usados na renderização das células — não os extratores brutos usados pela ordenação)
+- Botão "Exportar para Excel" próximo à tabela, visível só quando há turmas na tabela ordenada/filtrada
+- Nome do arquivo: `turmas-AAAA-MM-DD.xlsx`
+
+### FASE E2.3: TurmaDetalhe
+
+- Extratores de valor formatado para as 4 colunas da tabela de alunos (Aluno, Quantidade de faltas, Percentual de faltas, Faltas últimas 4 aulas), reaproveitando `formatPercentual` e o tratamento de "—"/"X/N" já usado na tela
+- Botão "Exportar para Excel" próximo à tabela, visível só quando há alunos ativos
+- Nome do arquivo: `alunos-<codigo-da-turma>-AAAA-MM-DD.xlsx`
+
+### FASE E2.4: Testes Manuais
+
+- Dashboard: exportar com filtros (Projeto/Aditivo/Meta/Instrutor/Situação/Código) e uma coluna ordenada aplicados; abrir o arquivo e conferir linhas/ordem/valores contra a tela
+- Dashboard: exportar antes de "Dias em Atraso"/"Último Lançamento" terminarem de carregar → célula vem como "—", não "..."
+- Dashboard: sem Projeto/Aditivo selecionados, ou filtro sem resultado → botão não aparece
+- TurmaDetalhe: exportar com a tabela ordenada; turma sem alunos ativos → botão não aparece
+- Conferir nome dos arquivos baixados
+
+---
+
+## 🔍 CRITÉRIOS DE ACEITAÇÃO
+
+- ✅ Arquivo `.xlsx` real (abre corretamente no Excel/LibreOffice/Google Sheets), não CSV
+- ✅ Linhas, ordem e valores do arquivo batem exatamente com o que está na tela no momento do clique
+- ✅ Cabeçalhos do arquivo iguais aos rótulos das colunas na tela
+- ✅ Nenhuma chamada de rede disparada pela exportação (geração 100% client-side)
+- ✅ Botão ausente quando não há dados para exportar
+
+---
+
+**Status:** Implementado — botão "Exportar para Excel" no Dashboard e no TurmaDetalhe, utilitário `frontend/src/utils/exportarExcel.js` compartilhado; validado no navegador (arquivo `.xlsx` válido, nomes corretos, botão ausente sem dados, sem chamadas de rede). Change ainda não arquivada (ver `openspec/changes/frontend-exportacao-excel/`).
+**Última atualização:** 2026-07-13
+
+---
+---
+
+# IMPLEMENTATION_GUIDE.md - Frontend Phase 3: Painel de Lançamentos Atrasados
+
+## 📋 VISÃO GERAL DA IMPLEMENTAÇÃO
+
+**Change:** `dashboard-lancamentos-atrasados`
+**Nova capability:** `painel-turmas-atrasadas`
+**Pré-requisito:** Frontend Phase 1/2 completas (`Dashboard.jsx`, filtros por URL, drill-down `/turmas/:idTurma` já existentes); Backend `metricas-frequencia` ganha um endpoint agregado novo.
+**Objetivo:** um **modal** (não uma nova rota) aberto a partir do Dashboard, mostrando o total de turmas em atraso e a média de dias de atraso no escopo de filtros já selecionado, com tabela buscável/paginada dessas turmas — cada linha navegando para o drill-down de turma já existente (`/turmas/:idTurma`).
+
+**Importante — não é um novo drill-down**: o drill-down de turma (`/turmas/:idTurma`) já existe e continua sendo a única navegação de rota para o detalhe de uma turma. O painel desta fase é um **modal sobre a tela do Dashboard** (não troca de URL) que serve como uma porta de entrada alternativa para esse mesmo drill-down — uma lista pré-filtrada só com as turmas atrasadas, evitando que o usuário precise localizá-las manualmente na tabela geral.
+
+---
+
+## 🎯 DECISÕES FECHADAS
+
+1. **"Turma em atraso" = `diasAtraso > 7`**, limiar **fixo (hardcoded) nesta fase**, como constante no backend (`MetricasFrequenciaService`). Turmas com `diasAtraso: null` (sem nenhuma aula passada) não contam como atrasadas.
+   - **Evolução futura já decidida (fora do escopo desta fase)**: o limiar deixará de ser uma constante em código e passará a vir de um **arquivo de persistência JSON** lido pelo backend — não uma configuração via UI nem query param —, permitindo ajustar o prazo sem novo deploy. Quando essa evolução for implementada, o valor deve manter um fallback para `7` caso o arquivo esteja ausente.
+2. **Novo endpoint agregado** `GET /api/metricas/atraso-lancamento/turmas-atrasadas`, aceitando os mesmos filtros de `GET /api/filtros/turmas` (`idProjeto`/`idProjetoAditivo` obrigatórios; `idMeta`/`idInstrutor`/`status` opcionais) — reaproveita `getAtrasoLancamentoPorTurma` já existente, chamado em paralelo para cada turma do escopo (mesmo padrão N-chamadas que o frontend já faz, só que dentro de um único request HTTP), filtra `diasAtraso > 7` e calcula total/média sobre o resultado.
+3. **Painel reutiliza os filtros já aplicados no Dashboard** (Projeto/Aditivo/Meta/Instrutor/Situação, lidos da URL) — não tem seleção de filtro própria. Só pode ser aberto quando Projeto+Aditivo já estiverem selecionados (mesma restrição da tabela principal).
+4. **Busca e paginação client-side**, sobre a lista já carregada pelo endpoint — mesmo padrão já usado no filtro de código do Dashboard.
+5. **Ordenação padrão da tabela do painel: `diasAtraso` decrescente** (turma mais atrasada primeiro).
+6. **Exportação em Excel**, alinhada com o restante do sistema: a lista do painel exporta para `.xlsx` reaproveitando o utilitário `exportarExcel.js` (`exportarParaExcel`) introduzido pela Phase 2 (`frontend-exportacao-excel`), sem gerar CSV nem duplicar lógica de geração de arquivo. `frontend-exportacao-excel` é pré-requisito de aplicação (deve ser aplicada antes, ou junto).
+
+---
+
+## 🎯 FASES DE IMPLEMENTAÇÃO
+
+### FASE PA.1: Endpoint Agregado (Backend)
+
+- `MetricasFrequenciaService`: novo método que recebe o escopo de filtros, resolve as turmas via `TurmaModel.getTurmasPorProjetoAditivo`, calcula `diasAtraso` de cada uma em paralelo, filtra `> 7` e retorna `{ total, mediaDiasAtraso, turmas: [...] }`
+- Nova rota em `backend/routes/api/metricas.js`, validação Joi igual à de `GET /api/filtros/turmas`
+- Atualizar `backend/API.md` e `backend/tests.http`
+- Validar contra o banco real: total e média batem com uma conferência manual sobre um escopo conhecido
+
+### FASE PA.2: Ponto de Entrada no Dashboard
+
+- Indicador/botão "Lançamentos atrasados" em `Dashboard.jsx`, visível só com Projeto+Aditivo selecionados
+- Ao clicar, abre o modal consultando o novo endpoint com os filtros correntes da URL
+
+### FASE PA.3: Componente do Painel
+
+- Novo componente de modal (`frontend/src/pages/` ou `components/`)
+- Título, botão de fechar, texto explicativo do critério (prazo ideal de 7 dias)
+- Dois indicadores: total de turmas em atraso e média de dias de atraso (arredondada)
+- Campo de busca por código/nome da turma (client-side)
+- Tabela: código/nome, projeto, instrutor, dias de atraso, último lançamento — ordenada por atraso decrescente por padrão
+- Paginação client-side quando a lista (após busca) exceder o tamanho de página
+- Clique numa linha navega para `/turmas/:idTurma` (drill-down já existente)
+- Botão "Exportar para Excel" (ver Decisão 6), reaproveitando `exportarExcel.js` da Phase 2
+
+### FASE PA.4: Testes Manuais
+
+- Abrir o painel com Projeto+Aditivo (+ demais filtros) selecionados; conferir que total/média batem com os dados reais do escopo
+- Buscar por código/nome dentro do painel
+- Paginação com uma lista maior que uma página
+- Clicar numa linha → navega para o drill-down correto
+- Fechar o painel → Dashboard continua com os filtros aplicados, sem perder estado
+- Escopo sem nenhuma turma atrasada → total `0`, média "—", tabela com mensagem de vazio
+
+---
+
+## 🔍 CRITÉRIOS DE ACEITAÇÃO
+
+- ✅ Painel só abre com Projeto+Aditivo já selecionados no Dashboard
+- ✅ Total e média refletem exatamente `diasAtraso > 7` dentro do escopo filtrado
+- ✅ Fechar o painel não altera os filtros do Dashboard (nenhuma troca de rota)
+- ✅ Clique numa linha do painel reutiliza o drill-down `/turmas/:idTurma` já existente, sem duplicar essa navegação
+- ✅ Busca e paginação não disparam chamada de rede nova
+- ✅ Exportação em Excel, consistente com o resto do sistema (ver Decisão 6)
+- ✅ Nenhuma escrita no banco — endpoint novo é somente leitura (`SELECT`)
+
+---
+
+**Status:** Implementado — endpoint `GET /api/metricas/atraso-lancamento/turmas-atrasadas`, modal `PainelLancamentosAtrasados` com indicadores/busca/paginação/exportação, ponto de entrada no Dashboard; validado no navegador (escopo com turmas atrasadas, escopo vazio, navegação para o detalhe, exportação Excel). Change ainda não arquivada (ver `openspec/changes/dashboard-lancamentos-atrasados/`).
+**Última atualização:** 2026-07-13

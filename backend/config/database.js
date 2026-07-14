@@ -10,7 +10,7 @@ const rawPool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelayMs: 0,
+  keepAliveInitialDelay: 0,
 });
 
 // Este projeto acessa um banco de produção compartilhado e só tem permissão

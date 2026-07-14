@@ -73,6 +73,34 @@ router.get(
   }
 );
 
+// GET /api/metricas/atraso-lancamento/turmas-atrasadas?idProjeto=X&idProjetoAditivo=Y&idMeta=Z&idInstrutor=W&status=S
+router.get(
+  '/atraso-lancamento/turmas-atrasadas',
+  validateQuery(
+    Joi.object({
+      idProjeto: Joi.number().integer().required(),
+      idProjetoAditivo: Joi.number().integer().required(),
+      idMeta: Joi.number().integer().optional(),
+      idInstrutor: Joi.number().integer().optional(),
+      // situação da turma: 0 não especificado / 1 não iniciada / 2 iniciada / 3 concluída / 4 cancelada
+      status: Joi.number().integer().min(0).max(4).optional(),
+    })
+  ),
+  async (req, res, next) => {
+    try {
+      const { idProjeto, idProjetoAditivo, idMeta, idInstrutor, status } = req.validatedQuery;
+      const metrica = await metricasService.getTurmasAtrasadas(idProjeto, idProjetoAditivo, {
+        idMeta,
+        idInstrutor,
+        status,
+      });
+      res.json(metrica);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // GET /api/metricas/atraso-lancamento/instrutor?idInstrutor=X
 router.get(
   '/atraso-lancamento/instrutor',

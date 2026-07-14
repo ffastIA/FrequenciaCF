@@ -37,7 +37,7 @@ O sistema SHALL expor `GET /api/filtros/metas?idProjetoAditivo=X`, exigindo `idP
 - **THEN** a resposta tem status 200 com as metas daquele aditivo
 
 ### Requirement: Endpoint de turmas com filtro de situação
-O sistema SHALL expor `GET /api/filtros/turmas?idProjeto=X&idProjetoAditivo=Y&idMeta=Z&idInstrutor=W&status=S`, exigindo `idProjeto` e `idProjetoAditivo` (number, obrigatórios), com `idMeta`, `idInstrutor` e `status` (number, 0 a 4) opcionais via validação Joi. Cada turma retornada SHALL incluir, além dos campos de `turma.*`, os campos `cursoDescricao` (via JOIN com `curso`), `instrutorNome` (via JOIN com `instrutor`) e `totalAlunosAtivos`: a quantidade de alunos matriculados naquela turma com `matricula.situacao = 7` ("ativo"), calculada por subquery (sem duplicar linhas de turma), para que consumidores não precisem resolver esses dados separadamente.
+O sistema SHALL expor `GET /api/filtros/turmas?idProjeto=X&idProjetoAditivo=Y&idMeta=Z&idInstrutor=W&status=S`, exigindo `idProjeto` e `idProjetoAditivo` (number, obrigatórios), com `idMeta`, `idInstrutor` e `status` (number, 0 a 4) opcionais via validação Joi. Cada turma retornada SHALL incluir, além dos campos de `turma.*`, os campos `cursoDescricao` (via JOIN com `curso`), `instrutorNome` (via JOIN com `instrutor`), `totalAlunosMatriculados` (quantidade de alunos com `matricula.situacao = 1`, "matriculado") e `totalAlunosAtivos` (quantidade de alunos com `matricula.situacao = 7`, "ativo") naquela turma, ambos calculados por subquery correlacionado (sem duplicar linhas de turma), para que consumidores não precisem resolver esses dados separadamente.
 
 #### Scenario: Turmas sem filtro de status
 - **WHEN** um cliente faz `GET /api/filtros/turmas?idProjeto=1&idProjetoAditivo=1`
@@ -59,13 +59,17 @@ O sistema SHALL expor `GET /api/filtros/turmas?idProjeto=X&idProjetoAditivo=Y&id
 - **WHEN** um cliente faz `GET /api/filtros/turmas?idProjeto=1&idProjetoAditivo=1`
 - **THEN** cada turma na resposta inclui `totalAlunosAtivos`, a contagem de alunos com `matricula.situacao = 7` naquela turma
 
-#### Scenario: Turma sem nenhum aluno ativo
-- **WHEN** uma turma do resultado não possui nenhuma matrícula com `situacao = 7`
-- **THEN** `totalAlunosAtivos` é `0` para aquela turma, não `null` nem ausente
+#### Scenario: Resposta inclui total de alunos matriculados
+- **WHEN** um cliente faz `GET /api/filtros/turmas?idProjeto=1&idProjetoAditivo=1`
+- **THEN** cada turma na resposta inclui `totalAlunosMatriculados`, a contagem de alunos com `matricula.situacao = 1` naquela turma
+
+#### Scenario: Turma sem nenhum aluno ativo ou matriculado
+- **WHEN** uma turma do resultado não possui nenhuma matrícula com `situacao = 7` nem `situacao = 1`
+- **THEN** `totalAlunosAtivos` e `totalAlunosMatriculados` são `0` para aquela turma, não `null` nem ausentes
 
 #### Scenario: Turma com múltiplas matrículas do mesmo aluno não gera linhas duplicadas
-- **WHEN** a contagem de alunos ativos é calculada para uma turma
-- **THEN** a resposta continua com uma única linha por turma (o subquery não multiplica as linhas de `turma` como um `JOIN` direto com `matricula` faria)
+- **WHEN** as contagens de alunos ativos e matriculados são calculadas para uma turma
+- **THEN** a resposta continua com uma única linha por turma (os subqueries não multiplicam as linhas de `turma` como um `JOIN` direto com `matricula` faria)
 
 ### Requirement: Endpoint de alunos por turma
 O sistema SHALL expor `GET /api/filtros/alunos?idTurma=X&situacao=S`, exigindo `idTurma` (number, obrigatório) e aceitando `situacao` (number, 0 a 8, opcional) via validação Joi. Sem `situacao`, retorna todos os alunos matriculados na turma (comportamento atual, retrocompatível); com `situacao`, retorna somente os alunos cuja `matricula.situacao` na turma seja igual ao valor informado, com o filtro aplicado na query SQL (não em memória).

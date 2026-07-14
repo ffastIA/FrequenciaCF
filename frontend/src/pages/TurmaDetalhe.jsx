@@ -4,12 +4,22 @@ import { getAlunos } from '../api/filtros';
 import { getAtrasoTurma, getFaltasRecentes } from '../api/metricas';
 import { useFaltasPorAlunos } from '../hooks/useFaltasPorAlunos';
 import { STATUS_TURMA } from '../constants';
-import { formatDateBR } from '../utils/formatDate';
+import { formatDateBR, dataDeHojeParaArquivo } from '../utils/formatDate';
 import { compararValores } from '../utils/ordenacao';
+import { exportarParaExcel } from '../utils/exportarExcel';
+import { formatSituacaoAluno } from '../utils/formatSituacaoAluno';
 
-// Alunos exibidos no detalhe: somente situação "ativo" (matricula.situacao = 7),
-// decisão explícita do responsável do projeto.
-const SITUACAO_ATIVO = 7;
+const SITUACOES_ALUNO = {
+  0: { label: 'Não especificado', value: 0 },
+  1: { label: 'Matriculado', value: 1 },
+  2: { label: 'Concluiu', value: 2 },
+  3: { label: 'Desistiu', value: 3 },
+  4: { label: 'Evadido', value: 4 },
+  5: { label: 'Não aprovado', value: 5 },
+  6: { label: 'Não iniciou', value: 6 },
+  7: { label: 'Ativo', value: 7 },
+  8: { label: 'Transferido', value: 8 },
+};
 
 function formatPercentual(percentual) {
   return percentual === null || percentual === undefined ? '—' : `${percentual}%`;
@@ -28,14 +38,28 @@ export default function TurmaDetalhe() {
   const [faltasRecentes, setFaltasRecentes] = useState(null);
   const [erro, setErro] = useState(null);
   const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: 'asc' });
+  const [situacaoSelecionada, setSituacaoSelecionada] = useState('7');
 
   const faltas = useFaltasPorAlunos(idTurma, alunos);
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const situacaoUrl = queryParams.get('situacao');
+
+    if (situacaoUrl !== null) {
+      setSituacaoSelecionada(situacaoUrl);
+    } else {
+      setSituacaoSelecionada('7');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     setCarregandoAlunos(true);
     setErro(null);
 
-    Promise.all([getAlunos(idTurma, SITUACAO_ATIVO), getAtrasoTurma(idTurma), getFaltasRecentes(idTurma)])
+    const situacaoParam = situacaoSelecionada === '' ? undefined : parseInt(situacaoSelecionada, 10);
+
+    Promise.all([getAlunos(idTurma, situacaoParam), getAtrasoTurma(idTurma), getFaltasRecentes(idTurma)])
       .then(([alunosResultado, atrasoResultado, faltasRecentesResultado]) => {
         setAlunos(alunosResultado);
         setAtraso(atrasoResultado);
@@ -43,7 +67,7 @@ export default function TurmaDetalhe() {
       })
       .catch((e) => setErro(e.message))
       .finally(() => setCarregandoAlunos(false));
-  }, [idTurma]);
+  }, [idTurma, situacaoSelecionada]);
 
   // Mapa idAluno -> quantidadeFaltas nas últimas N aulas realizadas (mesma janela
   // para todos os alunos da turma, vinda de uma única chamada por turma).
@@ -56,6 +80,12 @@ export default function TurmaDetalhe() {
   // número e texto como texto. null = "sem dado ainda" (carregando ou inexistente).
   const colunas = [
     { chave: 'nome', rotulo: 'Aluno', tipo: 'texto', valor: (aluno) => aluno.nome },
+    {
+      chave: 'situacao',
+      rotulo: 'Situação',
+      tipo: 'numero',
+      valor: (aluno) => aluno.situacao ?? null,
+    },
     {
       chave: 'quantidadeFaltas',
       rotulo: 'Quantidade de faltas',
@@ -93,12 +123,62 @@ export default function TurmaDetalhe() {
     );
   }
 
+  function handleMudarSituacao(valor) {
+    setSituacaoSelecionada(valor);
+
+    const params = new URLSearchParams(location.search);
+    if (valor === '') {
+      params.delete('situacao');
+    } else {
+      params.set('situacao', valor);
+    }
+    window.history.replaceState(null, '', `?${params.toString()}`);
+  }
+
   const colunaOrdenada = colunas.find((c) => c.chave === ordenacao.coluna);
   const alunosOrdenados = colunaOrdenada
     ? [...alunos].sort((a, b) =>
         compararValores(colunaOrdenada.valor(a), colunaOrdenada.valor(b), colunaOrdenada.tipo, ordenacao.direcao)
       )
     : alunos;
+
+  // Colunas de exportação: mesmo rótulo e mesmo valor FORMATADO exibido na
+  // célula (percentual com "%", "X/N" de faltas recentes, "—" para nulos).
+  const colunasExportacao = [
+    { rotulo: 'Aluno', valor: (aluno) => aluno.nome },
+    { rotulo: 'Situação', valor: (aluno) => formatSituacaoAluno(aluno.situacao ?? 0) },
+    {
+      rotulo: 'Quantidade de faltas',
+      valor: (aluno) => {
+        const falta = faltas[aluno.id_aluno];
+        const carregandoFalta = !falta || falta.carregando;
+        return carregandoFalta ? '—' : falta.erro ? '—' : falta.quantidadeFaltas;
+      },
+    },
+    {
+      rotulo: 'Percentual de faltas',
+      valor: (aluno) => {
+        const falta = faltas[aluno.id_aluno];
+        const carregandoFalta = !falta || falta.carregando;
+        return carregandoFalta ? '—' : falta.erro ? '—' : formatPercentual(falta.percentualFaltas);
+      },
+    },
+    {
+      rotulo: 'Faltas (últimas 4 aulas)',
+      valor: (aluno) => {
+        const aulasConsideradas = faltasRecentes?.aulasConsideradas ?? 0;
+        if (!faltasRecentes) return '—';
+        if (aulasConsideradas === 0) return '—';
+        const faltasRecentesAluno = faltasRecentesPorAluno[aluno.id_aluno] ?? 0;
+        return `${faltasRecentesAluno}/${aulasConsideradas}`;
+      },
+    },
+  ];
+
+  function handleExportar() {
+    const codigoTurma = turma?.codigo || idTurma;
+    exportarParaExcel(`alunos-${codigoTurma}-${dataDeHojeParaArquivo()}.xlsx`, colunasExportacao, alunosOrdenados);
+  }
 
   return (
     <div>
@@ -149,17 +229,38 @@ export default function TurmaDetalhe() {
               {atraso ? formatDateBR(atraso.dataUltimoLancamento) : '...'}
             </span>
           </div>
+          <div className="metric-highlight">
+            <span className="metric-label">Alunos listados</span>
+            <span className="metric-value">{alunos.length}</span>
+          </div>
         </div>
       </section>
 
-      <h2 className="section-title">Alunos ativos</h2>
+      <div className="filter-bar">
+        <div className="filter-field">
+          <span>Situação</span>
+          <select value={situacaoSelecionada} onChange={(e) => handleMudarSituacao(e.target.value)}>
+            <option value="">Todos</option>
+            {Object.entries(SITUACOES_ALUNO).map(([key, obj]) => (
+              <option key={key} value={key}>
+                {obj.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {carregandoAlunos ? (
         <p className="state-message">Carregando alunos...</p>
       ) : alunos.length === 0 ? (
-        <p className="state-message">Nenhum aluno ativo nesta turma.</p>
+        <p className="state-message">Nenhum aluno nesta turma.</p>
       ) : (
         <section className="card table-card">
+          <div className="table-toolbar">
+            <button type="button" className="btn-secondary" onClick={handleExportar}>
+              Exportar para Excel
+            </button>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -186,6 +287,7 @@ export default function TurmaDetalhe() {
                 return (
                   <tr key={aluno.id_aluno}>
                     <td>{aluno.nome}</td>
+                    <td>{formatSituacaoAluno(aluno.situacao ?? 0)}</td>
                     <td className="col-num">
                       {carregandoFalta ? '...' : falta.erro ? '—' : falta.quantidadeFaltas}
                     </td>

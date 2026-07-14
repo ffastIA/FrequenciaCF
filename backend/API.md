@@ -60,7 +60,7 @@ curl "http://localhost:3000/api/filtros/metas?idProjetoAditivo=2"
 
 ## `GET /turmas`
 
-Turmas de um projeto/aditivo, com filtros opcionais de meta, instrutor e **situação (status) da turma**. Cada turma inclui `cursoDescricao` e `instrutorNome` (via JOIN) e `totalAlunosAtivos` (contagem de `matricula.situacao = 7` daquela turma, via subquery), além dos campos de `turma.*`.
+Turmas de um projeto/aditivo, com filtros opcionais de meta, instrutor e **situação (status) da turma**. Cada turma inclui `cursoDescricao` e `instrutorNome` (via JOIN), `totalAlunosMatriculados` (contagem de `matricula.situacao = 1`, "matriculado") e `totalAlunosAtivos` (contagem de `matricula.situacao = 7`, "ativo") — ambos via subquery —, além dos campos de `turma.*`.
 
 | Parâmetro | Tipo | Obrigatório | Observação |
 |---|---|---|---|
@@ -186,9 +186,10 @@ curl "http://localhost:3000/api/metricas/atraso-lancamento/turma?idTurma=1597"
 ```
 
 - Uma aula só conta como **lançada** se `aula.status = 1` (realizada) **e** tiver ao menos um registro em `frequencia` com `presenca <> 0`. As duas condições são necessárias: linhas com `presenca = 0` são placeholders de "não lançado"; e aulas com `status = 0` (ainda não realizadas) podem ter `frequencia` pré-copiada de uma aula anterior — inclusive em aulas com data futura — então `presenca <> 0` sozinho não basta (senão a data pega aulas sem lançamento real, inclusive hoje).
-- `dataReferencia` é a data usada no cálculo do atraso: a última aula lançada (com lançamento real) da turma, ou — se a turma nunca lançou nenhuma frequência real — a aula mais antiga (fallback).
+- `dataReferencia` é a data usada no cálculo do atraso: a última aula lançada (com lançamento real) da turma, ou — se a turma nunca lançou nenhuma frequência real — a aula mais antiga (fallback). Essa busca é sempre restrita a `data <= hoje`, independente da situação da turma.
 - `dataUltimoLancamento` é o último lançamento **real**: igual a `dataReferencia` quando há lançamento real, e `null` quando a turma nunca lançou nada de verdade (o fallback não é usado aqui).
 - Se a turma ainda não tem nenhuma aula com `data <= hoje`, os três campos são `null`.
+- **Turmas concluídas** (`turma.status = 3`) com `data_fim` preenchida são uma exceção no cálculo de `diasAtraso`: em vez de `hoje - dataReferencia`, usa-se `data_fim - dataReferencia`, com piso em `0` (nunca negativo) — o atraso "congela" na data de término da turma, em vez de crescer indefinidamente com o passar do tempo depois que a turma já acabou. Se o último lançamento real ocorreu depois de `data_fim` (acontece em produção), `diasAtraso = 0`. Turmas concluídas sem `data_fim` e qualquer outra situação de turma continuam usando `hoje - dataReferencia`, sem mudança.
 
 ---
 
@@ -211,6 +212,57 @@ curl "http://localhost:3000/api/metricas/atraso-lancamento/instrutor?idInstrutor
 ```
 
 `dataUltimoLancamento` segue a mesma semântica do endpoint por turma (`null` quando o instrutor nunca lançou nada em nenhuma de suas turmas).
+
+---
+
+### `GET /atraso-lancamento/turmas-atrasadas`
+
+Agregado de turmas "em atraso" (`diasAtraso > 7`) dentro de um escopo de Projeto/Aditivo — mesmos filtros de `GET /api/filtros/turmas`. Calcula `diasAtraso` de cada turma do escopo (reaproveitando a mesma lógica de `/atraso-lancamento/turma`, em paralelo) e retorna o total, a média entre as turmas em atraso, e a lista delas.
+
+| Parâmetro | Tipo | Obrigatório |
+|---|---|---|
+| `idProjeto` | number | sim |
+| `idProjetoAditivo` | number | sim |
+| `idMeta` | number | não |
+| `idInstrutor` | number | não |
+| `status` | number (0-4) | não |
+
+**Exemplo:**
+```bash
+curl "http://localhost:3000/api/metricas/atraso-lancamento/turmas-atrasadas?idProjeto=21&idProjetoAditivo=10"
+```
+
+**Resposta 200:**
+```json
+{
+  "total": 2,
+  "mediaDiasAtraso": 15,
+  "turmas": [
+    {
+      "idTurma": 6010,
+      "codigo": "IR2-2602",
+      "cursoDescricao": "Introdução à Robótica II",
+      "instrutorNome": "FULANO DE TAL",
+      "diasAtraso": 20,
+      "dataUltimoLancamento": "2026-06-23"
+    },
+    {
+      "idTurma": 6011,
+      "codigo": "IR2-2603",
+      "cursoDescricao": "Introdução à Robótica II",
+      "instrutorNome": "FULANO DE TAL",
+      "diasAtraso": 10,
+      "dataUltimoLancamento": "2026-07-03"
+    }
+  ]
+}
+```
+
+- "Em atraso" = `diasAtraso > 7` (limiar exclusivo, fixo nesta versão — ver `MetricasFrequenciaService.PRAZO_DIAS_ATRASO`). Turmas com `diasAtraso: null` (sem nenhuma aula com `data <= hoje`) nunca são consideradas em atraso.
+- `mediaDiasAtraso` é `null` quando `total = 0` (evita divisão por zero); caso contrário, arredondada para inteiro.
+- `turmas` já vem filtrada e não paginada — a paginação/busca desse painel é feita no cliente, dado que o escopo (Projeto/Aditivo) já limita a um conjunto pequeno de turmas.
+
+**Erros:** `400` se `idProjeto`/`idProjetoAditivo` estiverem ausentes ou não forem números.
 
 ---
 

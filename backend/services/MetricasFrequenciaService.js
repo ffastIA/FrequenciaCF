@@ -15,6 +15,12 @@ function minDate(a, b) {
   return a < b ? a : b;
 }
 
+// "Turma em atraso" = diasAtraso > PRAZO_DIAS_ATRASO (limiar exclusivo). Fixo nesta
+// versão; evolução futura planejada: ler de um arquivo de persistência JSON, com
+// fallback para este valor caso o arquivo esteja ausente (ver design da change
+// dashboard-lancamentos-atrasados).
+const PRAZO_DIAS_ATRASO = 7;
+
 function diffDays(fromStr, toStr) {
   const from = new Date(`${fromStr}T00:00:00Z`);
   const to = new Date(`${toStr}T00:00:00Z`);
@@ -65,6 +71,15 @@ class MetricasFrequenciaService {
   // dataUltimoLancamento é o lançamento real (null se a turma nunca lançou nada),
   // distinto de dataReferencia/diasAtraso, que usam o fallback (aula mais antiga)
   // quando não há nenhum lançamento, para o cálculo de atraso continuar fazendo sentido.
+  //
+  // Turmas concluídas (status = 3) são exceção: diasAtraso "congela" na data de
+  // término (data_fim - dataReferencia) em vez de continuar crescendo com "hoje"
+  // para sempre depois que a turma já acabou. Se o último lançamento aconteceu
+  // depois do término (~13% das turmas concluídas em produção — ex.: correção
+  // tardia), diasAtraso é 0, não negativo: o trabalho foi concluído, sem pendência.
+  // A busca de dataReferencia/dataUltimoLancamento em si NÃO muda — continua
+  // restrita a "data <= hoje", preservando seu significado de data real do
+  // último lançamento independente da situação da turma.
   async getAtrasoLancamentoPorTurma(idTurma) {
     const hoje = today();
 
@@ -80,6 +95,14 @@ class MetricasFrequenciaService {
     }
 
     const dataReferencia = formatDate(referencia.data);
+
+    const turma = await this.turma.getTurmaById(idTurma);
+    if (turma && turma.status === 3 && turma.data_fim) {
+      const dataFim = formatDate(turma.data_fim);
+      const diasAtraso = Math.max(0, diffDays(dataReferencia, dataFim));
+      return { idTurma, diasAtraso, dataReferencia, dataUltimoLancamento };
+    }
+
     return { idTurma, diasAtraso: diffDays(dataReferencia, hoje), dataReferencia, dataUltimoLancamento };
   }
 
@@ -100,6 +123,41 @@ class MetricasFrequenciaService {
 
     const dataReferencia = formatDate(referencia.data);
     return { idInstrutor, diasAtraso: diffDays(dataReferencia, hoje), dataReferencia, dataUltimoLancamento };
+  }
+
+  // Agregado de "turmas em atraso" para um escopo de Projeto/Aditivo (mesmos filtros
+  // de TurmaModel.getTurmasPorProjetoAditivo): total, média de diasAtraso entre elas
+  // (arredondada, null se total = 0), e a lista dessas turmas. Reaproveita
+  // getAtrasoLancamentoPorTurma turma a turma, em paralelo.
+  async getTurmasAtrasadas(idProjeto, idProjetoAditivo, filtros = {}) {
+    const turmas = await this.turma.getTurmasPorProjetoAditivo(idProjeto, idProjetoAditivo, filtros);
+
+    const atrasos = await Promise.all(
+      turmas.map((turma) => this.getAtrasoLancamentoPorTurma(turma.id_turma))
+    );
+
+    const atrasadas = turmas
+      .map((turma, i) => ({ turma, atraso: atrasos[i] }))
+      .filter(({ atraso }) => atraso.diasAtraso !== null && atraso.diasAtraso > PRAZO_DIAS_ATRASO);
+
+    const total = atrasadas.length;
+    const mediaDiasAtraso =
+      total === 0
+        ? null
+        : Math.round(atrasadas.reduce((soma, { atraso }) => soma + atraso.diasAtraso, 0) / total);
+
+    return {
+      total,
+      mediaDiasAtraso,
+      turmas: atrasadas.map(({ turma, atraso }) => ({
+        idTurma: turma.id_turma,
+        codigo: turma.codigo,
+        cursoDescricao: turma.cursoDescricao,
+        instrutorNome: turma.instrutorNome,
+        diasAtraso: atraso.diasAtraso,
+        dataUltimoLancamento: atraso.dataUltimoLancamento,
+      })),
+    };
   }
 
   // Quantidade de faltas por aluno nas últimas `quantidadeAulas` aulas REALIZADAS da

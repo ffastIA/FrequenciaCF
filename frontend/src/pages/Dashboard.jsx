@@ -3,8 +3,10 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { getProjetos, getAditivos, getMetas, getTurmas, getInstrutores } from '../api/filtros';
 import { useAtrasoPorTurmas } from '../hooks/useAtrasoPorTurmas';
 import { STATUS_TURMA, STATUS_TURMA_OPTIONS } from '../constants';
-import { formatDateBR } from '../utils/formatDate';
+import { formatDateBR, dataDeHojeParaArquivo } from '../utils/formatDate';
 import { compararValores } from '../utils/ordenacao';
+import { exportarParaExcel } from '../utils/exportarExcel';
+import PainelLancamentosAtrasados from '../components/PainelLancamentosAtrasados';
 
 // Situação padrão do dashboard: "Iniciada" (status = 2), refletindo o foco em turmas
 // em andamento. Na URL, ausência de `status` = padrão Iniciada; `status=todas` = Todas
@@ -34,7 +36,7 @@ export default function Dashboard() {
   const statusParam = searchParams.get('status');
   // valor do select: '' = Todas; '2' = Iniciada (padrão quando ausente); etc.
   const status = statusParam === null ? STATUS_PADRAO : statusParam === STATUS_TODAS ? '' : statusParam;
-  const codigos = searchParams.get('codigos') || '';
+  const codigo = searchParams.get('codigo') || '';
 
   const [projetos, setProjetos] = useState([]);
   const [aditivos, setAditivos] = useState([]);
@@ -45,6 +47,7 @@ export default function Dashboard() {
   const [carregandoTurmas, setCarregandoTurmas] = useState(false);
   const [erro, setErro] = useState(null);
   const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: 'asc' });
+  const [painelAtrasadasAberto, setPainelAtrasadasAberto] = useState(false);
 
   const atrasos = useAtrasoPorTurmas(turmas);
 
@@ -107,7 +110,16 @@ export default function Dashboard() {
       idInstrutor: idInstrutor || undefined,
       status: status !== '' ? status : undefined,
     })
-      .then(setTurmas)
+      .then((resultado) => {
+        setTurmas(resultado);
+        // Limpa o código selecionado se ele não existir mais no escopo recém-
+        // buscado (checado aqui, com os dados que de fato chegaram, para não
+        // remover a seleção prematuramente enquanto a busca ainda está em
+        // andamento — ex.: refresh numa URL com "codigo" já preenchido).
+        if (codigo && !resultado.some((t) => t.codigo === codigo)) {
+          updateParams((p) => p.delete('codigo'));
+        }
+      })
       .catch((e) => setErro(e.message))
       .finally(() => setCarregandoTurmas(false));
   }, [idProjeto, idProjetoAditivo, idMeta, idInstrutor, status]);
@@ -121,7 +133,7 @@ export default function Dashboard() {
       p.delete('idMeta');
       p.delete('idInstrutor');
       p.delete('status');
-      p.delete('codigos');
+      p.delete('codigo');
     });
   }
 
@@ -131,7 +143,7 @@ export default function Dashboard() {
       p.delete('idMeta');
       p.delete('idInstrutor');
       p.delete('status');
-      p.delete('codigos');
+      p.delete('codigo');
     });
   }
 
@@ -140,7 +152,7 @@ export default function Dashboard() {
       value ? p.set('idMeta', value) : p.delete('idMeta');
       p.delete('idInstrutor');
       p.delete('status');
-      p.delete('codigos');
+      p.delete('codigo');
     });
   }
 
@@ -157,23 +169,23 @@ export default function Dashboard() {
     });
   }
 
-  function handleCodigosChange(value) {
+  function handleCodigoChange(value) {
     updateParams((p) => {
-      value ? p.set('codigos', value) : p.delete('codigos');
+      value ? p.set('codigo', value) : p.delete('codigo');
     });
   }
 
+  // Dropdown de código: as opções já são exatamente as turmas buscadas (escopo
+  // Projeto/Aditivo/Meta/Instrutor/Situação), sem chamada de API adicional.
+  const codigosDisponiveis = [...new Set(turmas.map((t) => t.codigo))]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
   // Filtro de código: aplicado no cliente sobre as turmas já carregadas, sem nova
-  // requisição. Comparação exata por código, ignorando maiúsculas/minúsculas e
-  // espaços ao redor de cada item separado por ";".
-  const codigosFiltro = codigos
-    .split(';')
-    .map((c) => c.trim().toUpperCase())
-    .filter(Boolean);
-  const turmasFiltradas =
-    codigosFiltro.length === 0
-      ? turmas
-      : turmas.filter((t) => codigosFiltro.includes((t.codigo || '').toUpperCase()));
+  // requisição. Seleção única, comparação exata por código. (A limpeza de uma
+  // seleção "órfã" — código que saiu do escopo — é feita no próprio efeito que
+  // busca "turmas", assim que os dados novos chegam; ver useEffect acima.)
+  const turmasFiltradas = codigo ? turmas.filter((t) => t.codigo === codigo) : turmas;
 
   // Colunas da tabela: cada uma expõe um extrator de valor BRUTO (não a string
   // formatada da célula) para a ordenação comparar corretamente número/data como
@@ -184,6 +196,13 @@ export default function Dashboard() {
     { chave: 'curso', rotulo: 'Curso', tipo: 'texto', classe: '', valor: (t) => t.cursoDescricao },
     { chave: 'instrutor', rotulo: 'Instrutor', tipo: 'texto', classe: '', valor: (t) => t.instrutorNome },
     { chave: 'situacao', rotulo: 'Situação', tipo: 'numero', classe: '', valor: (t) => t.status },
+    {
+      chave: 'alunosMatriculados',
+      rotulo: 'Alunos Matriculados',
+      tipo: 'numero',
+      classe: 'col-num',
+      valor: (t) => t.totalAlunosMatriculados,
+    },
     {
       chave: 'alunosAtivos',
       rotulo: 'Alunos ativos',
@@ -207,7 +226,7 @@ export default function Dashboard() {
     },
     {
       chave: 'ultimoLancamento',
-      rotulo: 'Último lançamento',
+      rotulo: 'Último Lançamento',
       tipo: 'numero',
       classe: 'col-date',
       valor: (t) => {
@@ -218,7 +237,7 @@ export default function Dashboard() {
     },
     {
       chave: 'diasAtraso',
-      rotulo: 'Dias de atraso',
+      rotulo: 'Dias em Atraso',
       tipo: 'numero',
       classe: 'col-num',
       valor: (t) => {
@@ -243,6 +262,39 @@ export default function Dashboard() {
         compararValores(colunaOrdenada.valor(a), colunaOrdenada.valor(b), colunaOrdenada.tipo, ordenacao.direcao)
       )
     : turmasFiltradas;
+
+  // Colunas de exportação: mesmo rótulo e mesmo valor FORMATADO exibido na
+  // célula (não o extrator bruto de `colunas`, que serve à ordenação).
+  const colunasExportacao = [
+    { rotulo: 'Código', valor: (t) => t.codigo },
+    { rotulo: 'Curso', valor: (t) => t.cursoDescricao },
+    { rotulo: 'Instrutor', valor: (t) => t.instrutorNome },
+    { rotulo: 'Situação', valor: (t) => STATUS_TURMA[t.status] },
+    { rotulo: 'Alunos Matriculados', valor: (t) => t.totalAlunosMatriculados },
+    { rotulo: 'Alunos ativos', valor: (t) => t.totalAlunosAtivos },
+    { rotulo: 'Início', valor: (t) => formatDateBR(t.data_inicio) },
+    { rotulo: 'Término', valor: (t) => formatDateBR(t.data_fim) },
+    {
+      rotulo: 'Último Lançamento',
+      valor: (t) => {
+        const atraso = atrasos[t.id_turma];
+        if (!atraso || atraso.carregando || atraso.erro) return '—';
+        return formatDateBR(atraso.dataUltimoLancamento);
+      },
+    },
+    {
+      rotulo: 'Dias em Atraso',
+      valor: (t) => {
+        const atraso = atrasos[t.id_turma];
+        if (!atraso || atraso.carregando || atraso.erro) return '—';
+        return atraso.diasAtraso ?? '—';
+      },
+    },
+  ];
+
+  function handleExportar() {
+    exportarParaExcel(`turmas-${dataDeHojeParaArquivo()}.xlsx`, colunasExportacao, turmasOrdenadas);
+  }
 
   return (
     <div>
@@ -325,16 +377,32 @@ export default function Dashboard() {
 
             <label className="filter-field">
               <span>Código da turma (opcional)</span>
-              <input
-                type="text"
-                placeholder="ex.: IR2-2602;OBR2-2602"
-                value={codigos}
-                onChange={(e) => handleCodigosChange(e.target.value)}
-              />
+              <select value={codigo} onChange={(e) => handleCodigoChange(e.target.value)}>
+                <option value="">Todos</option>
+                {codigosDisponiveis.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         ) : null}
+
+        {idProjeto && idProjetoAditivo ? (
+          <div className="filter-bar filter-bar-secondary">
+            <button type="button" className="btn-secondary" onClick={() => setPainelAtrasadasAberto(true)}>
+              Lançamentos atrasados
+            </button>
+          </div>
+        ) : null}
       </section>
+
+      <PainelLancamentosAtrasados
+        aberto={painelAtrasadasAberto}
+        onFechar={() => setPainelAtrasadasAberto(false)}
+        filtros={{ idProjeto, idProjetoAditivo, idMeta, idInstrutor, status }}
+      />
 
       {idProjeto && idProjetoAditivo ? (
         carregandoTurmas ? (
@@ -343,7 +411,12 @@ export default function Dashboard() {
           <p className="state-message">Nenhuma turma encontrada para os filtros selecionados.</p>
         ) : (
           <section className="card table-card">
-            <table className="data-table">
+            <div className="table-toolbar">
+              <button type="button" className="btn-secondary" onClick={handleExportar}>
+                Exportar para Excel
+              </button>
+            </div>
+            <table className="data-table table-turmas">
               <thead>
                 <tr>
                   {colunas.map((coluna) => (
@@ -382,6 +455,7 @@ export default function Dashboard() {
                           {STATUS_TURMA[turma.status]}
                         </span>
                       </td>
+                      <td className="col-num">{turma.totalAlunosMatriculados}</td>
                       <td className="col-num">{turma.totalAlunosAtivos}</td>
                       <td className="col-date">{formatDateBR(turma.data_inicio)}</td>
                       <td className="col-date">{formatDateBR(turma.data_fim)}</td>

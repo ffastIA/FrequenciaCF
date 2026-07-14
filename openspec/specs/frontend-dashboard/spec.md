@@ -27,7 +27,7 @@ Assim que Projeto e Aditivo estiverem selecionados (Meta é opcional), o sistema
 - **THEN** a tabela de turmas é buscada e exibida automaticamente, sem clique adicional
 
 ### Requirement: Colunas da tabela de turmas
-A tabela de turmas SHALL exibir, para cada turma: código, curso (`cursoDescricao`), instrutor (`instrutorNome`), situação (`status` traduzido para texto legível), total de alunos ativos (`totalAlunosAtivos`, alunos com `matricula.situacao = 7` naquela turma), data de início (`data_inicio`), data de término (`data_fim`), data do último lançamento de frequência (`dataUltimoLancamento`, obtida na mesma chamada de atraso já feita por turma) e dias de atraso no lançamento (`diasAtraso`). Todas as datas SHALL ser exibidas no formato `dd/mm/aaaa`; valores nulos SHALL ser exibidos como "—". A coluna de alunos ativos SHALL exibir o número diretamente a partir da resposta de `GET /api/filtros/turmas`, sem chamada de rede adicional nem estado de carregamento próprio.
+A tabela de turmas SHALL exibir, para cada turma, nesta ordem: código, curso (`cursoDescricao`), instrutor (`instrutorNome`), situação (`status` traduzido para texto legível), total de alunos matriculados — rotulada "Alunos Matriculados" (`totalAlunosMatriculados`, alunos com `matricula.situacao = 1` naquela turma), total de alunos ativos — rotulada "Alunos ativos" (`totalAlunosAtivos`, alunos com `matricula.situacao = 7` naquela turma), data de início (`data_inicio`), data de término (`data_fim`), data do último lançamento de frequência — rotulada "Último Lançamento" (`dataUltimoLancamento`, obtida na mesma chamada de atraso já feita por turma) — e dias de atraso no lançamento — rotulada "Dias em Atraso" (`diasAtraso`). Todas as datas SHALL ser exibidas no formato `dd/mm/aaaa`; valores nulos SHALL ser exibidos como "—". As colunas de alunos matriculados e de alunos ativos SHALL exibir o número diretamente a partir da resposta de `GET /api/filtros/turmas`, sem chamada de rede adicional nem estado de carregamento próprio. Os cabeçalhos das colunas SHALL permitir quebra de texto em duas ou mais linhas quando o rótulo for longo, para que a largura de cada coluna seja determinada pelo conteúdo exibido (data/número/texto da linha), não pelo comprimento do texto do cabeçalho; as células de dado (`<td>`) das colunas de data e número SHALL continuar sem quebra de linha. A quebra de cabeçalho SHALL NUNCA resultar em sobreposição visual entre colunas adjacentes — quando uma palavra do rótulo não couber inteira na largura disponível mesmo quebrando em espaços, o texto SHALL quebrar dentro da própria palavra em vez de vazar sobre a coluna vizinha.
 
 #### Scenario: Situação exibida como texto
 - **WHEN** uma turma tem `status = 3`
@@ -39,15 +39,31 @@ A tabela de turmas SHALL exibir, para cada turma: código, curso (`cursoDescrica
 
 #### Scenario: Último lançamento visível na tabela
 - **WHEN** a chamada de atraso de uma turma retorna `dataUltimoLancamento`
-- **THEN** a linha correspondente exibe essa data formatada; se `null` (turma nunca lançou), exibe "—"
+- **THEN** a linha correspondente exibe essa data formatada sob o cabeçalho "Último Lançamento"; se `null` (turma nunca lançou), exibe "—"
 
 #### Scenario: Total de alunos ativos visível na tabela
 - **WHEN** a tabela de turmas é exibida
 - **THEN** cada linha mostra o número de alunos ativos daquela turma (`totalAlunosAtivos`), aparecendo junto com as demais colunas da linha, sem atraso de carregamento
 
-#### Scenario: Turma sem nenhum aluno ativo
-- **WHEN** uma turma da tabela não tem nenhum aluno com `matricula.situacao = 7`
-- **THEN** a coluna de alunos ativos exibe `0`, não "—" nem célula vazia (o dado sempre está disponível, diferente das colunas que dependem de carregamento assíncrono)
+#### Scenario: Total de alunos matriculados visível na tabela, entre Situação e Alunos ativos
+- **WHEN** a tabela de turmas é exibida
+- **THEN** cada linha mostra, entre as colunas "Situação" e "Alunos ativos", o número de alunos matriculados daquela turma (`totalAlunosMatriculados`), sem atraso de carregamento
+
+#### Scenario: Turma sem nenhum aluno ativo ou matriculado
+- **WHEN** uma turma da tabela não tem nenhum aluno com `matricula.situacao = 7` nem `situacao = 1`
+- **THEN** as colunas de alunos ativos e de alunos matriculados exibem `0`, não "—" nem célula vazia
+
+#### Scenario: Cabeçalho longo quebra em múltiplas linhas
+- **WHEN** a tabela de turmas é exibida com colunas de rótulo longo (ex.: "Último Lançamento", "Dias em Atraso", "Alunos ativos", "Alunos Matriculados")
+- **THEN** o texto do cabeçalho quebra em duas ou mais linhas, sem forçar a coluna a ficar mais larga do que o necessário para o dado exibido nas linhas
+
+#### Scenario: Cabeçalhos adjacentes não se sobrepõem
+- **WHEN** dois cabeçalhos vizinhos têm rótulos longos com palavras que não cabem lado a lado numa única linha (ex.: "Alunos Matriculados" e "Alunos ativos")
+- **THEN** cada cabeçalho quebra dentro de sua própria coluna, sem que o texto de um invada visualmente o espaço do outro
+
+#### Scenario: Células de dado não quebram linha
+- **WHEN** uma coluna de data (Início, Término, Último Lançamento) ou de número (Dias em Atraso) exibe seu valor numa linha da tabela
+- **THEN** o valor continua exibido numa única linha, sem quebra, independentemente da quebra aplicada ao cabeçalho da mesma coluna
 
 ### Requirement: Busca de atraso por turma
 Para cada turma exibida na tabela, o sistema SHALL buscar `diasAtraso` via `GET /api/metricas/atraso-lancamento/turma?idTurma=X`, uma chamada por turma, disparadas em paralelo após a tabela base carregar.
@@ -231,7 +247,7 @@ A ordenação SHALL comparar o valor subjacente de cada coluna (número para col
 - **THEN** conforme cada valor chega, a linha correspondente é reposicionada de acordo com a ordenação ativa, sem exigir uma nova interação do usuário
 
 ### Requirement: Ordenação por coluna na tabela de turmas do Dashboard
-Na tela do Dashboard, cada cabeçalho da tabela de turmas (Código, Curso, Instrutor, Situação, Alunos ativos, Início, Término, Último lançamento, Dias de atraso) SHALL ser clicável. O primeiro clique num cabeçalho SHALL ordenar a tabela por aquela coluna em ordem crescente; um novo clique no mesmo cabeçalho SHALL inverter para ordem decrescente; um novo clique SHALL voltar a crescente, alternando indefinidamente entre as duas direções. Clicar num cabeçalho diferente do que estava ativo SHALL trocar a ordenação para a nova coluna em ordem crescente, mantendo sempre uma única coluna ordenada por vez. O cabeçalho da coluna ativa SHALL exibir um indicador visual da direção atual (crescente ou decrescente). Este comportamento SHALL seguir os mesmos critérios de comparação já estabelecidos para a tabela de alunos da tela de detalhe da turma (comparação por valor bruto, texto com acentuação, valores ausentes por último).
+Na tela do Dashboard, cada cabeçalho da tabela de turmas (Código, Curso, Instrutor, Situação, Alunos Matriculados, Alunos ativos, Início, Término, Último Lançamento, Dias em Atraso) SHALL ser clicável. O primeiro clique num cabeçalho SHALL ordenar a tabela por aquela coluna em ordem crescente; um novo clique no mesmo cabeçalho SHALL inverter para ordem decrescente; um novo clique SHALL voltar a crescente, alternando indefinidamente entre as duas direções. Clicar num cabeçalho diferente do que estava ativo SHALL trocar a ordenação para a nova coluna em ordem crescente, mantendo sempre uma única coluna ordenada por vez. O cabeçalho da coluna ativa SHALL exibir um indicador visual da direção atual (crescente ou decrescente). Este comportamento SHALL seguir os mesmos critérios de comparação já estabelecidos para a tabela de alunos da tela de detalhe da turma (comparação por valor bruto, texto com acentuação, valores ausentes por último).
 
 #### Scenario: Primeiro clique ordena crescente
 - **WHEN** o usuário clica pela primeira vez no cabeçalho de uma coluna da tabela de turmas
@@ -250,41 +266,105 @@ Na tela do Dashboard, cada cabeçalho da tabela de turmas (Código, Curso, Instr
 - **THEN** as turmas são ordenadas pela progressão `status` (0 não especificado, 1 não iniciada, 2 iniciada, 3 concluída, 4 cancelada), não pela ordem alfabética do texto exibido no badge
 
 #### Scenario: Colunas de data ordenam cronologicamente
-- **WHEN** o usuário ordena a coluna "Início", "Término" ou "Último lançamento"
+- **WHEN** o usuário ordena a coluna "Início", "Término" ou "Último Lançamento"
 - **THEN** as turmas são ordenadas pela data real (cronológica), não pela string formatada `dd/mm/aaaa`
 
-#### Scenario: Coluna "Alunos ativos" ordena numericamente
-- **WHEN** o usuário ordena a coluna "Alunos ativos"
-- **THEN** as turmas são ordenadas pelo valor numérico de `totalAlunosAtivos`, incluindo corretamente as turmas com `0` (não tratadas como ausentes/últimas, já que `0` é um valor real, não um dado faltante)
+#### Scenario: Coluna "Alunos Matriculados" ordena numericamente
+- **WHEN** o usuário ordena a coluna "Alunos Matriculados"
+- **THEN** as turmas são ordenadas pelo valor numérico de `totalAlunosMatriculados`, incluindo corretamente as turmas com `0` (não tratadas como ausentes/últimas, já que `0` é um valor real, não um dado faltante)
 
 #### Scenario: Valores ainda carregando ou ausentes ficam por último
-- **WHEN** a tabela é ordenada pela coluna "Último lançamento" ou "Dias de atraso" enquanto os dados de atraso de algumas turmas ainda estão carregando (ou a turma não tem valor, ex.: sem nenhuma aula)
+- **WHEN** a tabela é ordenada pela coluna "Último Lançamento" ou "Dias em Atraso" enquanto os dados de atraso de algumas turmas ainda estão carregando (ou a turma não tem valor, ex.: sem nenhuma aula)
 - **THEN** essas linhas aparecem sempre no final da tabela, em ambas as direções, e se reposicionam automaticamente assim que o dado chega, sem exigir nova interação
 
 ### Requirement: Filtro adicional por código de turma
-Na mesma barra dos filtros adicionais (Instrutor, Situação), o sistema SHALL disponibilizar um campo de texto opcional "Código da turma" onde o usuário pode digitar o código de uma ou mais turmas, separados por ponto e vírgula (`;`). Quando preenchido, a tabela SHALL exibir somente as turmas cujo `codigo` corresponda, de forma exata (ignorando maiúsculas/minúsculas e espaços ao redor de cada item), a algum dos códigos informados. O filtro SHALL ser aplicado sobre os dados de turmas já carregados no cliente (sem nova requisição à API) e SHALL ser combinado com os demais filtros já aplicados (Projeto/Aditivo/Meta/Instrutor/Situação). O filtro SHALL ser preservado na URL, seguindo o mesmo padrão dos demais filtros do Dashboard, e SHALL ser resetado ao trocar Projeto, Aditivo ou Meta, junto com Instrutor e Situação.
+Na mesma barra dos filtros adicionais (Instrutor, Situação), o sistema SHALL disponibilizar um dropdown de seleção única "Código da turma", com o mesmo comportamento visual e de interação de Projeto/Aditivo. As opções do dropdown SHALL ser os códigos das turmas que atendem aos demais filtros já selecionados (Projeto, Aditivo, Meta, Instrutor, Situação) — o mesmo conjunto de turmas já buscado para popular a tabela, sem chamada de API adicional —, deduplicados e ordenados alfabeticamente em ordem crescente, com uma opção vazia ("Todos") para não filtrar por código. Quando um código é selecionado, a tabela SHALL exibir somente a(s) turma(s) cujo `codigo` corresponda exatamente ao valor selecionado. O filtro SHALL ser preservado na URL (parâmetro `codigo`, singular), seguindo o mesmo padrão dos demais filtros do Dashboard, e SHALL ser resetado ao trocar Projeto, Aditivo ou Meta, junto com Instrutor e Situação. Se o código selecionado deixar de existir entre as opções disponíveis (por mudança em qualquer um dos demais filtros, incluindo Instrutor ou Situação), o sistema SHALL limpar a seleção automaticamente.
 
-#### Scenario: Filtrar por um único código
-- **WHEN** o usuário digita `IR2-2602` no campo "Código da turma"
-- **THEN** a tabela mostra somente a turma com esse código, dentro do escopo já filtrado por Projeto/Aditivo/Meta/Instrutor/Situação
+#### Scenario: Opções refletem o escopo já filtrado
+- **WHEN** o usuário já selecionou Projeto, Aditivo e, opcionalmente, Meta/Instrutor/Situação
+- **THEN** o dropdown de código lista somente os códigos das turmas que atendem a essa combinação de filtros, em ordem alfabética crescente
 
-#### Scenario: Filtrar por múltiplos códigos separados por ponto e vírgula
-- **WHEN** o usuário digita `IR2-2602;OBR2-2602`
-- **THEN** a tabela mostra as turmas cujos códigos sejam `IR2-2602` ou `OBR2-2602`
+#### Scenario: Selecionar um código filtra a tabela
+- **WHEN** o usuário seleciona um código no dropdown
+- **THEN** a tabela passa a exibir somente a turma (ou turmas, se houver mais de uma com o mesmo código no escopo) correspondente ao código selecionado
 
-#### Scenario: Espaços e caixa são ignorados na comparação
-- **WHEN** o usuário digita `ir2-2602; OBR2-2602 ` (com espaços e minúsculas)
-- **THEN** o filtro casa normalmente com os códigos `IR2-2602` e `OBR2-2602`, sem exigir digitação exata
+#### Scenario: Opção "Todos" remove o filtro de código
+- **WHEN** o usuário seleciona a opção vazia ("Todos")
+- **THEN** a tabela volta a exibir todas as turmas do escopo definido pelos demais filtros, sem restrição de código
 
-#### Scenario: Nenhuma turma corresponde aos códigos informados
-- **WHEN** os códigos digitados não correspondem a nenhuma turma do escopo atual
-- **THEN** a tabela exibe a mensagem de "nenhuma turma encontrada", mantendo o campo de código visível e preenchido
+#### Scenario: Trocar Instrutor ou Situação atualiza as opções disponíveis
+- **WHEN** o usuário tem um código selecionado e muda o filtro de Instrutor ou de Situação
+- **THEN** a lista de opções do dropdown de código é recalculada para refletir o novo escopo
 
-#### Scenario: Campo vazio não filtra nada
-- **WHEN** o campo "Código da turma" está vazio
-- **THEN** a tabela mostra todas as turmas do escopo, sem restrição adicional por código
+#### Scenario: Seleção de código órfã é limpa automaticamente
+- **WHEN** o código atualmente selecionado deixa de estar entre as turmas do escopo (por causa de uma mudança em Projeto, Aditivo, Meta, Instrutor ou Situação)
+- **THEN** o filtro de código é limpo automaticamente (volta para "Todos"), sem exigir ação manual do usuário
 
 #### Scenario: Trocar de Projeto/Aditivo/Meta reseta o filtro de código
-- **WHEN** o usuário tem códigos digitados no filtro e troca o Projeto, o Aditivo ou a Meta
-- **THEN** o campo "Código da turma" é limpo, junto com Instrutor e Situação
+- **WHEN** o usuário tem um código selecionado e troca o Projeto, o Aditivo ou a Meta
+- **THEN** o filtro de código volta para "Todos", junto com Instrutor e Situação
+
+### Requirement: Aplicação não oferece tradução automática do navegador
+`frontend/index.html` SHALL declarar `<meta name="google" content="notranslate">` e `<html lang="pt-BR">`, para que o Google Translate (e o tradutor embutido do Chrome) SHALL NOT ofereça nem aplique tradução automática nesta aplicação — o sistema é de uso interno, integralmente em português, e textos curtos de interface (cabeçalhos de tabela, rótulos) são especialmente propensos a tradução automática incorreta e sem contexto.
+
+#### Scenario: Navegador não oferece traduzir a página
+- **WHEN** um usuário com Chrome (ou navegador baseado em Chromium com Google Translate) abre qualquer tela da aplicação
+- **THEN** o navegador não exibe o prompt/ícone de oferecimento de tradução automática para a página
+
+#### Scenario: Idioma declarado corretamente
+- **WHEN** o HTML da aplicação é inspecionado
+- **THEN** o atributo `lang` do elemento `<html>` é `pt-BR`, refletindo o idioma real do conteúdo
+
+### Requirement: Exportação da tabela de turmas para Excel
+Na tela do Dashboard, quando a tabela de turmas estiver sendo exibida (ao menos uma turma no resultado atual), o sistema SHALL disponibilizar um botão "Exportar para Excel" que gera e baixa um arquivo `.xlsx` contendo exatamente as turmas e colunas visíveis na tabela no momento do clique — respeitando os filtros já aplicados (Projeto, Aditivo, Meta, Instrutor, Situação, Código da turma) e a ordenação por coluna ativa. A geração do arquivo SHALL ocorrer inteiramente no navegador, sem chamada de rede adicional. Cada coluna do arquivo SHALL usar o mesmo rótulo de cabeçalho e o mesmo valor formatado exibido na tela (datas em `dd/mm/aaaa`, situação traduzida para texto legível, "—" para valores nulos, ausentes ou ainda não carregados no momento do clique). O botão SHALL NOT ser exibido quando não houver turmas para exportar (mesma condição que já controla a exibição da tabela).
+
+#### Scenario: Exportar com filtros e ordenação aplicados
+- **WHEN** o usuário tem Projeto, Aditivo e um filtro adicional (ex.: Situação = Concluída) selecionados, com a tabela ordenada por uma coluna, e clica em "Exportar para Excel"
+- **THEN** o arquivo baixado contém somente as turmas que atendem a esses filtros, na mesma ordem exibida na tela
+
+#### Scenario: Cabeçalhos e valores do arquivo espelham a tela
+- **WHEN** o arquivo é aberto
+- **THEN** os cabeçalhos das colunas e o texto de cada célula (situação traduzida, datas formatadas, "—" para nulos) são iguais aos exibidos na tabela do Dashboard
+
+#### Scenario: Valor ainda carregando no momento da exportação
+- **WHEN** o usuário exporta antes de `diasAtraso`/`dataUltimoLancamento` de alguma turma terminar de carregar
+- **THEN** a célula correspondente no arquivo exporta como "—", não como o indicador visual de carregamento da tela
+
+#### Scenario: Botão ausente sem dados
+- **WHEN** a tabela de turmas está vazia (nenhuma turma corresponde aos filtros) ou os filtros obrigatórios (Projeto/Aditivo) ainda não foram selecionados
+- **THEN** o botão "Exportar para Excel" não é exibido
+
+### Requirement: Exportação da tabela de alunos para Excel
+Na tela de detalhe da turma, quando a tabela de alunos ativos estiver sendo exibida (ao menos um aluno no resultado atual), o sistema SHALL disponibilizar um botão "Exportar para Excel" que gera e baixa um arquivo `.xlsx` contendo exatamente os alunos e colunas visíveis na tabela no momento do clique — respeitando a ordenação por coluna ativa. A geração do arquivo SHALL ocorrer inteiramente no navegador, sem chamada de rede adicional. Cada coluna do arquivo SHALL usar o mesmo rótulo de cabeçalho e o mesmo valor formatado exibido na tela (percentual com `%`, "—" para valores nulos, ausentes ou ainda não carregados no momento do clique). O nome do arquivo SHALL incluir o código da turma. O botão SHALL NOT ser exibido quando não houver alunos ativos para exportar.
+
+#### Scenario: Exportar com ordenação aplicada
+- **WHEN** o usuário ordena a tabela de alunos por uma coluna e clica em "Exportar para Excel"
+- **THEN** o arquivo baixado contém os alunos na mesma ordem exibida na tela
+
+#### Scenario: Cabeçalhos e valores do arquivo espelham a tela
+- **WHEN** o arquivo é aberto
+- **THEN** os cabeçalhos das colunas e o texto de cada célula (percentual formatado, "—" para nulos) são iguais aos exibidos na tabela de alunos
+
+#### Scenario: Valor ainda carregando no momento da exportação
+- **WHEN** o usuário exporta antes das faltas de algum aluno terminarem de carregar
+- **THEN** a célula correspondente no arquivo exporta como "—", não como o indicador visual de carregamento da tela
+
+#### Scenario: Botão ausente sem alunos ativos
+- **WHEN** a turma não tem nenhum aluno ativo
+- **THEN** o botão "Exportar para Excel" não é exibido
+
+### Requirement: Ponto de entrada do painel de lançamentos atrasados
+Quando Projeto e Aditivo estiverem selecionados, o Dashboard SHALL exibir um indicador/botão que, ao ser clicado, abre o painel "Lançamentos atrasados" (capability `painel-turmas-atrasadas`) com o escopo de filtros correntes (Projeto, Aditivo, Meta, Instrutor, Situação).
+
+#### Scenario: Indicador visível com Projeto e Aditivo selecionados
+- **WHEN** o usuário tem Projeto e Aditivo selecionados no Dashboard
+- **THEN** o indicador/botão de "Lançamentos atrasados" é exibido na tela
+
+#### Scenario: Indicador abre o painel
+- **WHEN** o usuário clica no indicador/botão de "Lançamentos atrasados"
+- **THEN** o painel é aberto como modal, consultando o escopo de filtros correntes do Dashboard
+
+#### Scenario: Indicador ausente sem Projeto/Aditivo
+- **WHEN** o Dashboard é exibido sem Projeto e Aditivo selecionados
+- **THEN** o indicador/botão de "Lançamentos atrasados" não é exibido
 

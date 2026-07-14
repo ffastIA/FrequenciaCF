@@ -7,3 +7,12 @@ export function formatDateBR(value) {
   if (!ano || !mes || !dia) return '—';
   return `${dia}/${mes}/${ano}`;
 }
+
+// AAAA-MM-DD de hoje, para compor nomes de arquivo exportados.
+export function dataDeHojeParaArquivo() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoje.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}

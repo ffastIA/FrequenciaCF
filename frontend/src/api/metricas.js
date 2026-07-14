@@ -15,3 +15,7 @@ export function getAtrasoInstrutor(idInstrutor) {
 export function getFaltasRecentes(idTurma) {
   return get('/api/metricas/faltas-recentes', { idTurma });
 }
+
+export function getTurmasAtrasadas(params) {
+  return get('/api/metricas/atraso-lancamento/turmas-atrasadas', params);
+}

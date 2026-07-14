@@ -57,8 +57,26 @@ GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=1597
 ### Atraso no lançamento por turma que nunca lançou nada (fallback: primeira aula)
 GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=94
 
+### Turma concluída com lançamento ANTES do término: diasAtraso = data_fim - dataReferencia
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=290
+
+### Turma concluída com lançamento DEPOIS do término: diasAtraso = 0 (piso)
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=425
+
+### Turma concluída que nunca lançou nada (fallback + regra de conclusão combinadas)
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turma?idTurma=1668
+
 ### Atraso no lançamento agregado por instrutor
 GET {{baseUrl}}/api/metricas/atraso-lancamento/instrutor?idInstrutor=224
+
+### Turmas atrasadas: escopo com turmas em atraso (diasAtraso > 7)
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turmas-atrasadas?idProjeto=18&idProjetoAditivo=3
+
+### Turmas atrasadas: escopo sem nenhuma turma em atraso (total = 0, mediaDiasAtraso = null)
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turmas-atrasadas?idProjeto=4&idProjetoAditivo=1
+
+### Erro esperado: idProjetoAditivo ausente -> 400
+GET {{baseUrl}}/api/metricas/atraso-lancamento/turmas-atrasadas?idProjeto=18
 
 ### Faltas recentes por turma (últimas 4 aulas realizadas)
 GET {{baseUrl}}/api/metricas/faltas-recentes?idTurma=5986

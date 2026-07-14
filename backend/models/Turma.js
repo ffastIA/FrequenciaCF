@@ -13,10 +13,12 @@ class TurmaModel {
   async getTurmasPorProjetoAditivo(idProjeto, idProjetoAditivo, filtros = {}) {
     const { idMeta, idInstrutor, status } = filtros;
 
-    // totalAlunosAtivos via subquery correlacionado (não JOIN): uma relação 1:N com
-    // matricula duplicaria as linhas de turma e exigiria GROUP BY em todo o SELECT t.*.
+    // totalAlunosAtivos/totalAlunosMatriculados via subquery correlacionado (não JOIN):
+    // uma relação 1:N com matricula duplicaria as linhas de turma e exigiria GROUP BY
+    // em todo o SELECT t.*.
     let sql = `
       SELECT t.*, c.descricao AS cursoDescricao, i.nome AS instrutorNome,
+        (SELECT COUNT(*) FROM matricula m WHERE m.id_turma = t.id_turma AND m.situacao = 1) AS totalAlunosMatriculados,
         (SELECT COUNT(*) FROM matricula m WHERE m.id_turma = t.id_turma AND m.situacao = 7) AS totalAlunosAtivos
       FROM turma t
       INNER JOIN meta_turma mt ON t.id_meta_turma = mt.id_meta_turma
