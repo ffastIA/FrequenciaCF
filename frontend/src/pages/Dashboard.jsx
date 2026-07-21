@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { getProjetos, getAditivos, getMetas, getTurmas, getInstrutores } from '../api/filtros';
 import { useAtrasoPorTurmas } from '../hooks/useAtrasoPorTurmas';
+import { useVagas } from '../hooks/useVagas';
 import { STATUS_TURMA, STATUS_TURMA_OPTIONS } from '../constants';
 import { formatDateBR, dataDeHojeParaArquivo } from '../utils/formatDate';
+import { formatPercentual } from '../utils/formatPercentual';
 import { compararValores } from '../utils/ordenacao';
 import { exportarParaExcel } from '../utils/exportarExcel';
 import PainelLancamentosAtrasados from '../components/PainelLancamentosAtrasados';
@@ -50,6 +52,7 @@ export default function Dashboard() {
   const [painelAtrasadasAberto, setPainelAtrasadasAberto] = useState(false);
 
   const atrasos = useAtrasoPorTurmas(turmas);
+  const { vagas, vagasEmEdicao, handleVagasChange, handleVagasSalvar } = useVagas();
 
   // Atualiza os query params numa única escrita (mantém a garantia de nunca disparar
   // busca com combinação "no meio do caminho": upstream e downstream mudam juntos).
@@ -197,6 +200,13 @@ export default function Dashboard() {
     { chave: 'instrutor', rotulo: 'Instrutor', tipo: 'texto', classe: '', valor: (t) => t.instrutorNome },
     { chave: 'situacao', rotulo: 'Situação', tipo: 'numero', classe: '', valor: (t) => t.status },
     {
+      chave: 'vagas',
+      rotulo: 'Vagas',
+      tipo: 'numero',
+      classe: 'col-num',
+      valor: (t) => vagas[t.id_turma] ?? 0,
+    },
+    {
       chave: 'alunosMatriculados',
       rotulo: 'Alunos Matriculados',
       tipo: 'numero',
@@ -209,6 +219,17 @@ export default function Dashboard() {
       tipo: 'numero',
       classe: 'col-num',
       valor: (t) => t.totalAlunosAtivos,
+    },
+    {
+      chave: 'percentualOcupacao',
+      rotulo: '% Ocupação',
+      tipo: 'numero',
+      classe: 'col-num',
+      valor: (t) => {
+        const vagasTurma = vagas[t.id_turma] ?? 0;
+        if (vagasTurma <= 0) return null;
+        return Number(((t.totalAlunosAtivos / vagasTurma) * 100).toFixed(2));
+      },
     },
     {
       chave: 'inicio',
@@ -270,8 +291,18 @@ export default function Dashboard() {
     { rotulo: 'Curso', valor: (t) => t.cursoDescricao },
     { rotulo: 'Instrutor', valor: (t) => t.instrutorNome },
     { rotulo: 'Situação', valor: (t) => STATUS_TURMA[t.status] },
+    { rotulo: 'Vagas', valor: (t) => vagas[t.id_turma] ?? 0 },
     { rotulo: 'Alunos Matriculados', valor: (t) => t.totalAlunosMatriculados },
     { rotulo: 'Alunos ativos', valor: (t) => t.totalAlunosAtivos },
+    {
+      rotulo: '% Ocupação',
+      valor: (t) =>
+        formatPercentual(
+          vagas[t.id_turma] > 0
+            ? Number(((t.totalAlunosAtivos / vagas[t.id_turma]) * 100).toFixed(2))
+            : null
+        ),
+    },
     { rotulo: 'Início', valor: (t) => formatDateBR(t.data_inicio) },
     { rotulo: 'Término', valor: (t) => formatDateBR(t.data_fim) },
     {
@@ -455,8 +486,30 @@ export default function Dashboard() {
                           {STATUS_TURMA[turma.status]}
                         </span>
                       </td>
+                      <td className="col-num" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="25"
+                          step="1"
+                          className="input-vagas"
+                          value={vagasEmEdicao[turma.id_turma] ?? vagas[turma.id_turma] ?? 0}
+                          onChange={(e) => handleVagasChange(turma.id_turma, e.target.value)}
+                          onBlur={() => handleVagasSalvar(turma.id_turma)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.target.blur();
+                          }}
+                        />
+                      </td>
                       <td className="col-num">{turma.totalAlunosMatriculados}</td>
                       <td className="col-num">{turma.totalAlunosAtivos}</td>
+                      <td className="col-num">
+                        {formatPercentual(
+                          vagas[turma.id_turma] > 0
+                            ? Number(((turma.totalAlunosAtivos / vagas[turma.id_turma]) * 100).toFixed(2))
+                            : null
+                        )}
+                      </td>
                       <td className="col-date">{formatDateBR(turma.data_inicio)}</td>
                       <td className="col-date">{formatDateBR(turma.data_fim)}</td>
                       <td className="col-date">

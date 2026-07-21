@@ -17,3 +17,20 @@ export async function get(path, params = {}) {
 
   return body;
 }
+
+export async function put(path, body = {}) {
+  const url = new URL(BASE_URL + path);
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const responseBody = await response.json();
+
+  if (!response.ok) {
+    throw new Error(responseBody.erro || 'Erro ao gravar na API');
+  }
+
+  return responseBody;
+}

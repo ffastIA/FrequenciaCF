@@ -89,3 +89,30 @@ GET {{baseUrl}}/api/metricas/faltas-recentes?idTurma=5955
 
 ### Erro esperado: idTurma ausente -> 400
 GET {{baseUrl}}/api/metricas/faltas-recentes
+
+### Vagas: mapa completo (arquivo vazio -> {})
+GET {{baseUrl}}/api/vagas
+
+### Vagas: define o valor de uma turma
+PUT {{baseUrl}}/api/vagas/1597
+Content-Type: application/json
+
+{"vagas": 20}
+
+### Erro esperado: vagas negativo -> 400
+PUT {{baseUrl}}/api/vagas/1597
+Content-Type: application/json
+
+{"vagas": -1}
+
+### Erro esperado: vagas acima do limite (> 25) -> 400
+PUT {{baseUrl}}/api/vagas/1597
+Content-Type: application/json
+
+{"vagas": 26}
+
+### Erro esperado: idTurma inválido -> 400
+PUT {{baseUrl}}/api/vagas/abc
+Content-Type: application/json
+
+{"vagas": 10}

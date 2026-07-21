@@ -12,6 +12,7 @@ app.use(express.json());
 // Rotas
 app.use('/api/filtros', require('./routes/api/filtros'));
 app.use('/api/metricas', require('./routes/api/metricas'));
+app.use('/api/vagas', require('./routes/api/vagas'));
 
 // Erro handler (deve ser o último middleware)
 app.use(require('./middleware/errorHandler'));

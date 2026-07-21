@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:3000`
 
-Todas as rotas são `GET`, somente leitura, e retornam JSON.
+Todas as rotas retornam JSON. Todas as rotas que leem/escrevem no MySQL são `GET`, somente leitura. A única exceção é `/api/vagas`, que persiste num arquivo JSON local do backend (nunca no MySQL) e por isso expõe um endpoint `PUT` — ver seção "Vagas" abaixo.
 
 ## Filtros
 
@@ -297,6 +297,55 @@ curl "http://localhost:3000/api/metricas/faltas-recentes?idTurma=1597"
 - Aluno matriculado sem nenhum registro de `frequencia` numa aula considerada não conta falta para ela.
 
 **Erros:** `400` se `idTurma` estiver ausente ou não for número.
+
+---
+
+## Vagas
+
+Base: `/api/vagas`
+
+Número de vagas disponíveis por turma. Persistido em `backend/data/vagas.json`, um arquivo local no backend — **nunca** no MySQL. Turmas sem valor definido são consideradas com `0` vagas.
+
+---
+
+### `GET /api/vagas`
+
+Mapa de vagas por turma, achatado (`{ "<idTurma>": <vagas> }`). Turmas sem valor definido não aparecem no mapa (o default `0` é responsabilidade do cliente).
+
+**Exemplo:**
+```bash
+curl http://localhost:3000/api/vagas
+```
+
+**Resposta 200:**
+```json
+{ "1597": 20, "4509": 15 }
+```
+
+---
+
+### `PUT /api/vagas/:idTurma`
+
+Define o número de vagas de uma turma.
+
+| Parâmetro | Tipo | Obrigatório | Observação |
+|---|---|---|---|
+| `idTurma` | number (path) | sim | |
+| `vagas` | number (body, inteiro 0–25) | sim | |
+
+**Exemplo:**
+```bash
+curl -X PUT http://localhost:3000/api/vagas/1597 \
+  -H "Content-Type: application/json" \
+  -d '{"vagas": 20}'
+```
+
+**Resposta 200:**
+```json
+{ "id_turma": 1597, "vagas": 20 }
+```
+
+**Erros:** `400` se `idTurma` não for número, ou se `vagas` estiver ausente, não for inteiro, for negativo ou maior que `25`.
 
 ---
 

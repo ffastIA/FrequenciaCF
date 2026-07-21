@@ -8,6 +8,7 @@ import { formatDateBR, dataDeHojeParaArquivo } from '../utils/formatDate';
 import { compararValores } from '../utils/ordenacao';
 import { exportarParaExcel } from '../utils/exportarExcel';
 import { formatSituacaoAluno } from '../utils/formatSituacaoAluno';
+import { formatPercentual } from '../utils/formatPercentual';
 
 const SITUACOES_ALUNO = {
   0: { label: 'Não especificado', value: 0 },
@@ -20,10 +21,6 @@ const SITUACOES_ALUNO = {
   7: { label: 'Ativo', value: 7 },
   8: { label: 'Transferido', value: 8 },
 };
-
-function formatPercentual(percentual) {
-  return percentual === null || percentual === undefined ? '—' : `${percentual}%`;
-}
 
 export default function TurmaDetalhe() {
   const { idTurma } = useParams();

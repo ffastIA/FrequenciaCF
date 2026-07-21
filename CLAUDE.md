@@ -15,7 +15,7 @@ Proibido, sem exceção, mesmo em scripts auxiliares, migrations, seeds ou taref
 
 **Como isso é aplicado:**
 - `backend/config/database.js` envolve o pool MySQL com um guard (`assertReadOnly`) que bloqueia, em tempo de execução, qualquer query cujo texto não comece com `SELECT`/`SHOW`/`EXPLAIN`/`DESCRIBE` — inclusive em conexões obtidas diretamente via `pool.getConnection()`. Isso vale mesmo que um model ou rota futura tente executar uma escrita por engano.
-- Todas as rotas em `backend/routes/api/` devem ser `GET`. Não adicionar `POST`/`PUT`/`PATCH`/`DELETE` que gravem no MySQL.
+- Rotas que leem ou escrevem no MySQL devem ser sempre `GET`. Rotas que operam exclusivamente sobre armazenamento local em arquivo (fora do MySQL — ex.: um JSON local no backend) podem usar outros verbos HTTP (`PUT`/`POST`/`PATCH`), desde que documentadas explicitamente como não tocando o banco (ver `openspec/changes/vagas-turma-json/` para o primeiro exemplo). Nunca adicionar `POST`/`PUT`/`PATCH`/`DELETE` que gravem no MySQL.
 - Ao adicionar novos models ou queries, sempre use `SELECT` parametrizado (`?`) — nunca concatenar valores diretamente na string SQL.
 - Se uma funcionalidade futura genuinamente precisar escrever no banco (ex.: lançar frequência), isso exige decisão explícita do responsável pelo projeto — não implementar unilateralmente. Trate como uma mudança de escopo que precisa ser combinada antes.
 
